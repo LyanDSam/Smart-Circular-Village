@@ -1,0 +1,39 @@
+{
+  "name": "smart-circular-village",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "vite build",
+    "preview": "vite preview",
+    "bootstrap:admin": "node scripts/bootstrapAdmin.js"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^3.9.0",
+    "@tanstack/react-query": "^5.59.0",
+    "clsx": "^2.1.1",
+    "firebase": "^11.10.0",
+    "lucide-react": "^0.453.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-hook-form": "^7.53.1",
+    "react-router-dom": "^6.27.0",
+    "recharts": "^2.13.0",
+    "qrcode.react": "^4.1.0",
+    "tailwind-merge": "^2.5.4",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.3",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.14",
+    "vite": "^5.4.14"
+  },
+  "overrides": {
+    "undici": "^6.21.1",
+    "esbuild": "^0.25.0"
+  }
+}
