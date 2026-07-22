@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
-import { deviceService } from '@/services/deviceService';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { deviceService, computeDeviceStatus } from '@/services/deviceService';
+import { rtdbService } from '@/services/rtdbService';
 
 export const useDevices = () => {
   const [devices, setDevices] = useState([]);
@@ -23,6 +24,29 @@ export const useDevices = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
 
+  const rtdbMapRef = useRef({});
+
+  // Helper to recalculate device stats dynamically from current device array
+  const recalculateStats = useCallback((deviceList) => {
+    const totalCount = deviceList.length;
+    const onlineCount = deviceList.filter((d) => d.status === 'online').length;
+    const offlineCount = deviceList.filter((d) => d.status === 'offline').length;
+    const disabledCount = deviceList.filter((d) => d.status === 'disabled' || d.isActive === false).length;
+    const warningCount = deviceList.filter((d) => d.status === 'warning' || d.status === 'error').length;
+    const compostBinsCount = deviceList.filter((d) => (d.deviceType || d.type) === 'compost').length;
+    const stationsCount = deviceList.filter((d) => (d.deviceType || d.type) === 'collection_station').length;
+
+    setStats({
+      totalCount,
+      onlineCount,
+      offlineCount,
+      disabledCount,
+      warningCount,
+      compostBinsCount,
+      stationsCount,
+    });
+  }, []);
+
   const fetchDevices = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -35,23 +59,86 @@ export const useDevices = () => {
         pageSize: 12,
       });
 
-      setDevices(res.devices);
+      // Enrich initial devices list with current RTDB state if available
+      const enrichedDevices = res.devices.map((d) => {
+        const liveNode = rtdbMapRef.current[d.deviceId];
+        const computedStatus = computeDeviceStatus(d, liveNode);
+        return {
+          ...d,
+          status: computedStatus,
+        };
+      });
+
+      setDevices(enrichedDevices);
       setTotalPages(res.totalPages);
       setTotalCount(res.totalCount);
-
-      const deviceStats = await deviceService.getDeviceStats();
-      setStats(deviceStats);
+      recalculateStats(enrichedDevices);
     } catch (err) {
       console.error('Error in useDevices hook:', err);
       setError('Gagal memuat daftar perangkat IoT.');
     } finally {
       setIsLoading(false);
     }
-  }, [search, type, status, page]);
+  }, [search, type, status, page, recalculateStats]);
 
   useEffect(() => {
     fetchDevices();
-  }, [fetchDevices]);
+
+    // 1. Subscribe to RTDB live device state updates (heartbeat / telemetry / alerts)
+    const unsubscribeRtdb = rtdbService.listenAllDevices((rtdbData) => {
+      rtdbMapRef.current = rtdbData || {};
+
+      setDevices((prevDevices) => {
+        const updated = prevDevices.map((d) => {
+          const liveNode = rtdbData ? rtdbData[d.deviceId] : null;
+          const liveStatus = computeDeviceStatus(d, liveNode);
+          const rawLastSeen = liveNode?.lastSeen;
+          const lastSeenMs =
+            typeof rawLastSeen === 'number'
+              ? rawLastSeen * (rawLastSeen < 1e11 ? 1000 : 1)
+              : null;
+
+          return {
+            ...d,
+            lastSeen: lastSeenMs ? new Date(lastSeenMs).toISOString() : d.lastSeen,
+            status: liveStatus,
+            telemetry: liveNode?.telemetry || d.telemetry,
+            alerts: liveNode?.alerts || d.alerts,
+          };
+        });
+
+        recalculateStats(updated);
+        return updated;
+      });
+    });
+
+    // 2. Periodic Ticker (every 10s) to evaluate 60-second heartbeat timeouts
+    const timer = setInterval(() => {
+      setDevices((prevDevices) => {
+        let changed = false;
+        const updated = prevDevices.map((d) => {
+          const liveNode = rtdbMapRef.current[d.deviceId];
+          const newStatus = computeDeviceStatus(d, liveNode);
+          if (newStatus !== d.status) {
+            changed = true;
+            return { ...d, status: newStatus };
+          }
+          return d;
+        });
+
+        if (changed) {
+          recalculateStats(updated);
+          return updated;
+        }
+        return prevDevices;
+      });
+    }, 10000);
+
+    return () => {
+      if (typeof unsubscribeRtdb === 'function') unsubscribeRtdb();
+      clearInterval(timer);
+    };
+  }, [fetchDevices, recalculateStats]);
 
   const handleResetFilters = () => {
     setSearch('');

@@ -7,6 +7,11 @@ const firebaseConfig = {
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  databaseURL:
+    import.meta.env.VITE_FIREBASE_DATABASE_URL ||
+    (import.meta.env.VITE_FIREBASE_PROJECT_ID
+      ? `https://${import.meta.env.VITE_FIREBASE_PROJECT_ID}-default-rtdb.firebaseio.com`
+      : undefined),
 };
 
 // Check if valid Firebase config is present

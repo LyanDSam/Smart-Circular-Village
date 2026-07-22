@@ -29,27 +29,75 @@ export const generateApiKey = () => {
 };
 
 /**
- * Compute Device Online Status from RTDB `lastSeen` heartbeat.
+ * Compute Device Online Status from RTDB `lastSeen` heartbeat & live alerts.
  * Rules:
- * - If !device.isActive -> 'disabled'
- * - If !lastSeen -> 'offline'
- * - If currentTime - lastSeen < 60,000 ms (60 seconds) -> 'online'
- * - Else -> 'offline'
+ * - If !device.isActive || device.isDeleted -> 'disabled'
+ * - If currentTime - lastSeen >= 60,000 ms (60 seconds) or !lastSeen -> 'offline'
+ * - If online (< 60s) AND liveRtdbNode/device has error alerts -> 'error'
+ * - If online (< 60s) AND liveRtdbNode/device has warning alerts -> 'warning'
+ * - If status === 'maintenance' -> 'maintenance'
+ * - Else -> 'online'
  */
-export const computeDeviceStatus = (device, lastSeenMs = null) => {
-  if (!device || device.isActive === false) return 'disabled';
+export const computeDeviceStatus = (device, liveRtdbNode = null) => {
+  if (!device || device.isActive === false || device.isDeleted) return 'disabled';
+  if (device.status === 'maintenance' || liveRtdbNode?.status === 'maintenance') return 'maintenance';
 
-  const timestampMs = lastSeenMs || (device.lastSeen ? new Date(device.lastSeen).getTime() : null);
-  if (!timestampMs) return 'offline';
+  const rtdbStatus = (
+    typeof liveRtdbNode === 'object' && liveRtdbNode?.status
+      ? liveRtdbNode.status
+      : device.status || ''
+  ).toLowerCase();
 
-  const diffMs = Date.now() - timestampMs;
-  if (diffMs < 60000) {
-    return 'online';
+  const alerts = liveRtdbNode?.alerts || device.alerts;
+  const rawLastSeen =
+    typeof liveRtdbNode === 'number'
+      ? liveRtdbNode
+      : liveRtdbNode?.lastSeen ?? device.lastSeen;
+
+  let isOnline = false;
+
+  if (typeof rawLastSeen === 'number') {
+    // If rawLastSeen is a small number (e.g. 32, 94 seconds uptime from ESP32 boot without NTP)
+    if (rawLastSeen < 1000000) {
+      isOnline = rtdbStatus === 'online' || Boolean(liveRtdbNode);
+    } else {
+      // Standard Unix epoch timestamp
+      const timestampMs = rawLastSeen * (rawLastSeen < 1e11 ? 1000 : 1);
+      const diffMs = Date.now() - timestampMs;
+      isOnline = diffMs < 60000 && diffMs >= -300000;
+    }
+  } else if (rawLastSeen) {
+    const timestampMs = new Date(rawLastSeen).getTime();
+    if (!isNaN(timestampMs)) {
+      const diffMs = Date.now() - timestampMs;
+      isOnline = diffMs < 60000 && diffMs >= -300000;
+    }
+  } else if (rtdbStatus === 'online') {
+    isOnline = true;
   }
-  return 'offline';
+
+  if (!isOnline) return 'offline';
+
+  // Check alert flags when device is actively connected
+  if (alerts?.hasError || rtdbStatus === 'error') {
+    return 'error';
+  }
+  if (
+    alerts?.highTemperature ||
+    alerts?.lowMoisture ||
+    alerts?.gasWarning ||
+    alerts?.waterOverflow ||
+    rtdbStatus === 'warning'
+  ) {
+    return 'warning';
+  }
+
+  return 'online';
 };
 
 export const deviceService = {
+  computeDeviceStatus,
+
   /**
    * Automatically generate next sequential Device ID based on type.
    * e.g., SCV-COLL-001, SCV-COLL-002 or SCV-COMP-001, SCV-COMP-002

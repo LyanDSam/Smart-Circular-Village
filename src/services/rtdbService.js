@@ -141,4 +141,49 @@ export const rtdbService = {
       console.warn('Error deleting pending transaction from RTDB:', err);
     }
   },
+
+  /**
+   * Listen to live telemetry & heartbeat of a specific device from RTDB (`devices/{deviceId}`).
+   */
+  listenDeviceTelemetry(deviceId, onUpdateCallback) {
+    if (!deviceId) return () => {};
+    const devRef = ref(rtdb, `devices/${deviceId}`);
+    const unsubscribe = onValue(
+      devRef,
+      (snapshot) => {
+        if (snapshot.exists()) {
+          onUpdateCallback(snapshot.val());
+        } else {
+          onUpdateCallback(null);
+        }
+      },
+      (error) => {
+        console.warn(`RTDB device telemetry listener notice for ${deviceId}:`, error);
+        onUpdateCallback(null);
+      }
+    );
+    return unsubscribe;
+  },
+
+  /**
+   * Listen to live status & telemetry of all devices from RTDB (`devices`).
+   */
+  listenAllDevices(onUpdateCallback) {
+    const devicesRef = ref(rtdb, 'devices');
+    const unsubscribe = onValue(
+      devicesRef,
+      (snapshot) => {
+        if (snapshot.exists()) {
+          onUpdateCallback(snapshot.val());
+        } else {
+          onUpdateCallback({});
+        }
+      },
+      (error) => {
+        console.warn('RTDB all devices listener notice:', error);
+        onUpdateCallback({});
+      }
+    );
+    return unsubscribe;
+  },
 };

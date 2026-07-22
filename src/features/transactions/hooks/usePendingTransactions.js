@@ -12,20 +12,35 @@ export const usePendingTransactions = ({ autoOpenModal = false } = {}) => {
   // Track transaction IDs that user explicitly closed/dismissed
   const dismissedSetRef = useRef(new Set());
 
-  // Subscribe to RTDB pending_transactions in real time via onValue
+  // Keep refs of current modal state to prevent tearing down listener on modal state changes
+  const activePendingRef = useRef(activePending);
+  activePendingRef.current = activePending;
+
+  const unknownRfidPendingRef = useRef(unknownRfidPending);
+  unknownRfidPendingRef.current = unknownRfidPending;
+
+  const autoOpenModalRef = useRef(autoOpenModal);
+  autoOpenModalRef.current = autoOpenModal;
+
+  // Subscribe to RTDB pending_transactions in real time via onValue (runs once on mount)
   useEffect(() => {
     setIsLoading(true);
+    console.log('[RTDB Sync] Subscribing to /pending_transactions listener...');
 
     const unsubscribe = rtdbService.listenPendingTransactions(async (items) => {
-      // Filter waiting_confirmation or pending items
-      const activeItems = items.filter(
-        (item) => item.status === 'waiting_confirmation' || item.status === 'pending' || item.status === 'processing'
-      );
+      console.log('[RTDB Sync] Incoming pending_transactions snapshot received:', items);
 
+      // Filter items: treat missing/undefined status as 'waiting_confirmation' by default
+      const activeItems = items.filter((item) => {
+        const status = (item.status || '').toLowerCase();
+        return !status || status === 'waiting_confirmation' || status === 'pending' || status === 'processing';
+      });
+
+      // Update local state immediately for instant UI responsiveness
       setPendingList(activeItems);
       setIsLoading(false);
 
-      // Perform direct indexed Firestore queries: where("rfidUid", "==", rfidUid)
+      // Perform direct indexed Firestore queries for RFID lookup
       const newMap = {};
       await Promise.all(
         activeItems.map(async (item) => {
@@ -38,27 +53,28 @@ export const usePendingTransactions = ({ autoOpenModal = false } = {}) => {
                 newMap[cleanRfid] = citizen;
               }
             } catch (err) {
-              console.warn(`Error querying user for RFID ${cleanRfid}:`, err);
+              console.warn(`[RTDB Sync] Error querying citizen user for RFID ${cleanRfid}:`, err);
             }
           }
         })
       );
 
-      setCitizenMap(newMap);
+      setCitizenMap((prev) => ({ ...prev, ...newMap }));
 
-      // Auto-open modal only if autoOpenModal === true AND transaction was not dismissed by user
-      if (autoOpenModal && activeItems.length > 0) {
-        const latestUnconfirmed = activeItems.find(
-          (i) =>
-            (i.status === 'waiting_confirmation' || i.status === 'pending') &&
-            !dismissedSetRef.current.has(i.transactionId)
-        );
+      // Auto-open modal if autoOpenModal is enabled and no modal is currently active
+      if (autoOpenModalRef.current && activeItems.length > 0) {
+        const latestUnconfirmed = activeItems.find((i) => {
+          const st = (i.status || '').toLowerCase();
+          return (!st || st === 'waiting_confirmation' || st === 'pending') && !dismissedSetRef.current.has(i.transactionId);
+        });
 
-        if (latestUnconfirmed && !activePending && !unknownRfidPending) {
+        if (latestUnconfirmed && !activePendingRef.current && !unknownRfidPendingRef.current) {
           const cleanRfid = String(latestUnconfirmed.rfidUid || latestUnconfirmed.uid || '').replace(/\s+/g, '').toUpperCase();
-          if (newMap[cleanRfid]) {
+          if (newMap[cleanRfid] || citizenMap[cleanRfid]) {
+            console.log('[RTDB Sync] Auto-opening Confirmation Modal for:', latestUnconfirmed.transactionId);
             setActivePending(latestUnconfirmed);
           } else {
+            console.log('[RTDB Sync] Auto-opening Unknown RFID Modal for:', latestUnconfirmed.transactionId);
             setUnknownRfidPending(latestUnconfirmed);
           }
         }
@@ -66,9 +82,10 @@ export const usePendingTransactions = ({ autoOpenModal = false } = {}) => {
     });
 
     return () => {
+      console.log('[RTDB Sync] Unsubscribing from /pending_transactions listener.');
       if (typeof unsubscribe === 'function') unsubscribe();
     };
-  }, [autoOpenModal, activePending, unknownRfidPending]);
+  }, []);
 
   const openConfirmationModal = useCallback((item) => {
     const rawRfid = item.rfidUid || item.uid || '';

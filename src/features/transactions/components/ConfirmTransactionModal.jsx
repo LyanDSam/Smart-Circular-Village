@@ -1,7 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { DeviceStatusBadge } from '@/features/devices/components/DeviceStatusBadge';
 import { pointService, WASTE_CATEGORIES } from '@/services/pointService';
+import { deviceService } from '@/services/deviceService';
 import {
   X,
   Scale,
@@ -11,6 +13,8 @@ import {
   CheckCircle2,
   Loader2,
   AlertCircle,
+  MapPin,
+  AlertTriangle,
 } from 'lucide-react';
 
 export const ConfirmTransactionModal = ({
@@ -22,7 +26,13 @@ export const ConfirmTransactionModal = ({
   isSubmitting = false,
 }) => {
   const [selectedCategory, setSelectedCategory] = useState('Organic');
+  const [device, setDevice] = useState(null);
+  const [isDeviceLoading, setIsDeviceLoading] = useState(false);
 
+  // In-memory cache ref for device lookups to avoid repeated Firestore queries
+  const deviceCacheRef = useRef({});
+
+  const deviceId = pendingItem?.deviceId || pendingItem?.device || '';
   const rawRfid = pendingItem?.rfidUid || pendingItem?.uid || '';
   const cleanRfid = useMemo(
     () => String(rawRfid || '').replace(/\s+/g, '').toUpperCase(),
@@ -31,6 +41,43 @@ export const ConfirmTransactionModal = ({
 
   const weightGram = pendingItem?.weightGram ?? pendingItem?.weight ?? 0;
   const weightKg = useMemo(() => pointService.formatWeightKg(weightGram), [weightGram]);
+
+  // Query Firestore devices/{deviceId} with in-memory caching
+  useEffect(() => {
+    if (!isOpen || !deviceId) {
+      setDevice(null);
+      return;
+    }
+
+    if (deviceCacheRef.current[deviceId] !== undefined) {
+      setDevice(deviceCacheRef.current[deviceId]);
+      return;
+    }
+
+    let isMounted = true;
+    setIsDeviceLoading(true);
+
+    deviceService
+      .getDeviceById(deviceId)
+      .then((dev) => {
+        if (!isMounted) return;
+        deviceCacheRef.current[deviceId] = dev;
+        setDevice(dev);
+      })
+      .catch((err) => {
+        console.warn(`[ConfirmModal] Error querying device ${deviceId}:`, err);
+        if (!isMounted) return;
+        deviceCacheRef.current[deviceId] = null;
+        setDevice(null);
+      })
+      .finally(() => {
+        if (isMounted) setIsDeviceLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, deviceId]);
 
   // Real-time point calculation preview
   const calculatedPoints = useMemo(
@@ -68,7 +115,66 @@ export const ConfirmTransactionModal = ({
 
         {/* Content Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
-          {/* Citizen Details Box */}
+          {/* Section 1: Device Information Card (📍 Device Information) */}
+          <div className="p-4 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <MapPin className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                📍 Device Information
+              </span>
+              {device ? (
+                <DeviceStatusBadge status={device.status} />
+              ) : (
+                <Badge variant="outline" className="text-[10px] font-semibold bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800 flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" />
+                  <span>Perangkat Tidak Terdaftar</span>
+                </Badge>
+              )}
+            </div>
+
+            {isDeviceLoading ? (
+              <div className="flex items-center space-x-2 py-2 text-slate-400">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Memuat informasi lokasi perangkat...</span>
+              </div>
+            ) : device ? (
+              <div className="pl-5 space-y-1">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-extrabold text-slate-900 dark:text-slate-100">
+                    {device.name}
+                  </p>
+                  <span className="font-mono font-semibold text-emerald-600 dark:text-emerald-400 text-xs">
+                    {device.deviceId}
+                  </span>
+                </div>
+                <div className="text-xs text-slate-600 dark:text-slate-300 space-y-0.5 pt-0.5">
+                  <p>
+                    <span className="font-medium text-slate-400">Location: </span>
+                    <span className="font-semibold">{device.location?.address || '-'}</span>
+                  </p>
+                  <p>
+                    <span className="font-medium text-slate-400">Village: </span>
+                    <span className="font-semibold">{device.location?.village || '-'}</span>
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="p-3 bg-amber-50/80 dark:bg-amber-950/40 rounded-lg border border-amber-200 dark:border-amber-900/60 text-amber-800 dark:text-amber-200 flex items-start gap-2.5">
+                <AlertTriangle className="w-5 h-5 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-xs">Unknown Device</span>
+                    <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/60 font-semibold">
+                      Device ID: {deviceId || 'N/A'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-0.5">
+                    Perangkat ini belum terdaftar di Cloud Firestore. Transaksi tetap dapat dilanjutkan.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
           <div className="p-4 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2 text-xs">
             <div className="flex items-center justify-between">
               <span className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">

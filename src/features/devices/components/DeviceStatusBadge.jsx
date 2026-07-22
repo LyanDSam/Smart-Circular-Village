@@ -1,6 +1,6 @@
 import React from 'react';
 import { Badge } from '@/components/ui/badge';
-import { Wifi, WifiOff, Wrench, Ban, HelpCircle } from 'lucide-react';
+import { Wifi, WifiOff, Wrench, Ban, HelpCircle, AlertTriangle, AlertCircle } from 'lucide-react';
 
 export const DeviceStatusBadge = ({ status = 'unknown', className = '' }) => {
   const statusConfig = {
@@ -16,10 +16,22 @@ export const DeviceStatusBadge = ({ status = 'unknown', className = '' }) => {
       classes: 'bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
       icon: WifiOff,
     },
+    warning: {
+      label: 'Peringatan',
+      variant: 'outline',
+      classes: 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800',
+      icon: AlertTriangle,
+    },
+    error: {
+      label: 'Error',
+      variant: 'outline',
+      classes: 'bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-950/80 dark:text-rose-300 dark:border-rose-800',
+      icon: AlertCircle,
+    },
     maintenance: {
       label: 'Pemeliharaan',
       variant: 'outline',
-      classes: 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800',
+      classes: 'bg-blue-50 text-blue-800 border-blue-300 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800',
       icon: Wrench,
     },
     disabled: {
