@@ -58,11 +58,42 @@ export const DevicesPage = () => {
     handleResetFilters,
     createDevice,
     updateDevice,
+    approveDevice,
+    rejectDevice,
     toggleActive,
     regenerateApiKey,
     pingDevice,
     deleteDevice,
   } = useDevices();
+
+  const handleApproveDevice = async (device) => {
+    try {
+      await approveDevice(device.deviceId, userProfile);
+      showToast(`✅ Perangkat "${device.name}" (${device.deviceId}) berhasil disetujui! Status approval menjadi 'approved'.`);
+    } catch (err) {
+      showToast(err.message || 'Gagal menyetujui perangkat.', 'error');
+    }
+  };
+
+  const handleRejectDevice = (device) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: `Tolak Pendaftaran Perangkat "${device.name}"?`,
+      description: `Apakah Anda yakin ingin menolak pendaftaran perangkat ${device.deviceId}? Data persetujuan akan disimpan dengan audit timestamp.`,
+      confirmText: 'Tolak Perangkat',
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          await rejectDevice(device.deviceId, userProfile, 'Ditolak oleh Administrator');
+          showToast(`❌ Perangkat "${device.name}" (${device.deviceId}) telah ditolak.`);
+        } catch (err) {
+          showToast(err.message || 'Gagal menolak perangkat.', 'error');
+        } finally {
+          setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        }
+      },
+    });
+  };
 
   const showToast = (text, type = 'success') => {
     setFeedback({ text, type });
@@ -238,6 +269,8 @@ export const DevicesPage = () => {
               onRegenerateKey={promptRegenerateKey}
               onToggleActive={handleToggleActive}
               onPing={handlePingDevice}
+              onApprove={handleApproveDevice}
+              onReject={handleRejectDevice}
               onDelete={promptDeleteDevice}
             />
           ))}
@@ -251,6 +284,8 @@ export const DevicesPage = () => {
           onRegenerateKey={promptRegenerateKey}
           onToggleActive={handleToggleActive}
           onPing={handlePingDevice}
+          onApprove={handleApproveDevice}
+          onReject={handleRejectDevice}
           onDelete={promptDeleteDevice}
         />
       )}

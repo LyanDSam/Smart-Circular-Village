@@ -1,6 +1,3 @@
-import React from 'react';
-import { DeviceStatusBadge } from './DeviceStatusBadge';
-import { Button } from '@/components/ui/button';
 import {
   Sprout,
   Scale,
@@ -11,6 +8,8 @@ import {
   Trash2,
   ExternalLink,
   Bell,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 
 export const DeviceTable = ({
@@ -21,6 +20,8 @@ export const DeviceTable = ({
   onRegenerateKey,
   onToggleActive,
   onPing,
+  onApprove,
+  onReject,
   onDelete,
 }) => {
   return (
@@ -93,6 +94,30 @@ export const DeviceTable = ({
                   {/* Actions */}
                   <td className="py-3.5 px-4 text-right">
                     <div className="flex items-center justify-end gap-1">
+                      {canManage && (device.approvalStatus === 'pending' || device.status === 'pending') && (
+                        <>
+                          <Button
+                            size="sm"
+                            onClick={() => onApprove && onApprove(device)}
+                            className="h-7 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1"
+                            title="Setujui Perangkat"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Setujui</span>
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onReject && onReject(device)}
+                            className="h-7 px-2.5 border-rose-200 text-rose-600 hover:bg-rose-50 font-bold text-xs gap-1"
+                            title="Tolak Perangkat"
+                          >
+                            <XCircle className="w-3.5 h-3.5" />
+                            <span>Tolak</span>
+                          </Button>
+                        </>
+                      )}
+
                       <Button
                         variant="ghost"
                         size="sm"

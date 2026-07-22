@@ -1,9 +1,21 @@
 import React from 'react';
 import { Badge } from '@/components/ui/badge';
-import { Wifi, WifiOff, Wrench, Ban, HelpCircle, AlertTriangle, AlertCircle } from 'lucide-react';
+import { Wifi, WifiOff, Wrench, Ban, HelpCircle, AlertTriangle, AlertCircle, Clock, XCircle } from 'lucide-react';
 
 export const DeviceStatusBadge = ({ status = 'unknown', className = '' }) => {
   const statusConfig = {
+    pending: {
+      label: 'Pending Verifikasi',
+      variant: 'outline',
+      classes: 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800',
+      icon: Clock,
+    },
+    rejected: {
+      label: 'Ditolak',
+      variant: 'outline',
+      classes: 'bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-950/80 dark:text-rose-300 dark:border-rose-800',
+      icon: XCircle,
+    },
     online: {
       label: 'Online',
       variant: 'outline',

@@ -51,10 +51,12 @@ export const DeviceFilters = ({
             className="px-3 py-2 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-700 dark:text-slate-300 font-medium focus:outline-none focus:ring-1 focus:ring-emerald-500"
           >
             <option value="all">Semua Status</option>
+            <option value="pending">Pending Verifikasi</option>
             <option value="online">Online</option>
             <option value="offline">Offline</option>
             <option value="maintenance">Pemeliharaan</option>
             <option value="disabled">Non-Aktif</option>
+            <option value="rejected">Ditolak</option>
           </select>
 
           {/* Reset Filters */}

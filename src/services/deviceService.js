@@ -39,7 +39,10 @@ export const generateApiKey = () => {
  * - Else -> 'online'
  */
 export const computeDeviceStatus = (device, liveRtdbNode = null) => {
-  if (!device || device.isActive === false || device.isDeleted) return 'disabled';
+  if (!device || device.isDeleted) return 'disabled';
+  if (device.approvalStatus === 'pending' || device.status === 'pending') return 'pending';
+  if (device.approvalStatus === 'rejected' || device.status === 'rejected') return 'rejected';
+  if (device.isActive === false) return 'disabled';
   if (device.status === 'maintenance' || liveRtdbNode?.status === 'maintenance') return 'maintenance';
 
   const rtdbStatus = (
@@ -162,6 +165,17 @@ export const deviceService = {
       status: computeDeviceStatus(d),
     }));
 
+    // Filter by Device Status
+    if (status !== 'all') {
+      if (status === 'pending') {
+        devicesList = devicesList.filter((d) => d.approvalStatus === 'pending' || d.status === 'pending');
+      } else if (status === 'rejected') {
+        devicesList = devicesList.filter((d) => d.approvalStatus === 'rejected' || d.status === 'rejected');
+      } else {
+        devicesList = devicesList.filter((d) => d.status === status);
+      }
+    }
+
     // Filter by Device Type
     if (type !== 'all') {
       devicesList = devicesList.filter((d) => (d.deviceType || d.type) === type);
@@ -241,6 +255,7 @@ export const deviceService = {
 
   /**
    * Create new IoT Device metadata in Cloud Firestore & initialize RTDB node.
+   * Device is registered with approvalStatus = 'pending' awaiting Admin review.
    */
   async createDevice(deviceData) {
     const cleanId = deviceData.deviceId.trim().toUpperCase();
@@ -253,7 +268,7 @@ export const deviceService = {
 
     const apiKey = generateApiKey();
 
-    // Firestore Schema: Metadata ONLY (No redundant telemetry or status)
+    // Firestore Schema: Metadata with approvalStatus: 'pending'
     const newDevice = {
       deviceId: cleanId,
       name: deviceData.name.trim(),
@@ -266,6 +281,7 @@ export const deviceService = {
       },
       apiKey: apiKey,
       firmwareVersion: deviceData.firmwareVersion?.trim() || '1.0.0',
+      approvalStatus: 'pending',
       isActive: true,
       isDeleted: false,
       createdAt: serverTimestamp(),
@@ -387,6 +403,45 @@ export const deviceService = {
   },
 
   /**
+   * Approve a pending device (Write audit metadata: approvedBy, approvedAt, approvalStatus: 'approved').
+   */
+  async approveDevice(deviceId, adminUser = null) {
+    if (!deviceId) throw new Error('Device ID tidak valid.');
+
+    const dRef = doc(db, 'devices', deviceId);
+    await updateDoc(dRef, {
+      approvalStatus: 'approved',
+      status: 'active',
+      approvedBy: adminUser?.fullName || adminUser?.email || 'Administrator',
+      approvedAt: serverTimestamp(),
+      isActive: true,
+      updatedAt: serverTimestamp(),
+    });
+
+    return true;
+  },
+
+  /**
+   * Reject a pending device (Write audit metadata: rejectedBy, rejectedAt, rejectionReason, approvalStatus: 'rejected').
+   */
+  async rejectDevice(deviceId, adminUser = null, reason = '') {
+    if (!deviceId) throw new Error('Device ID tidak valid.');
+
+    const dRef = doc(db, 'devices', deviceId);
+    await updateDoc(dRef, {
+      approvalStatus: 'rejected',
+      status: 'rejected',
+      rejectedBy: adminUser?.fullName || adminUser?.email || 'Administrator',
+      rejectedAt: serverTimestamp(),
+      rejectionReason: reason.trim(),
+      isActive: false,
+      updatedAt: serverTimestamp(),
+    });
+
+    return true;
+  },
+
+  /**
    * Soft Delete Device in Cloud Firestore.
    */
   async deleteDevice(deviceId) {
@@ -408,6 +463,7 @@ export const deviceService = {
     const { devices } = await this.getDevices({ pageSize: 10000 });
 
     const totalCount = devices.length;
+    const pendingCount = devices.filter((d) => d.approvalStatus === 'pending' || d.status === 'pending').length;
     const onlineCount = devices.filter((d) => d.status === 'online').length;
     const offlineCount = devices.filter((d) => d.status === 'offline').length;
     const disabledCount = devices.filter((d) => d.status === 'disabled' || !d.isActive).length;
@@ -416,6 +472,7 @@ export const deviceService = {
 
     return {
       totalCount,
+      pendingCount,
       onlineCount,
       offlineCount,
       disabledCount,

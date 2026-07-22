@@ -22,8 +22,7 @@ export const GlobalPendingListener = () => {
     location.pathname.startsWith('/transactions') ||
     location.pathname.startsWith('/officer/transactions');
 
-  // Disabled automatic popup modals when transactions arrive as per user instruction
-  const enableAutoModal = false;
+  const enableAutoModal = isOfficer && !isOnTransactionsPage;
 
   const {
     activePending,

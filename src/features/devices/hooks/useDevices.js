@@ -29,6 +29,7 @@ export const useDevices = () => {
   // Helper to recalculate device stats dynamically from current device array
   const recalculateStats = useCallback((deviceList) => {
     const totalCount = deviceList.length;
+    const pendingCount = deviceList.filter((d) => d.approvalStatus === 'pending' || d.status === 'pending').length;
     const onlineCount = deviceList.filter((d) => d.status === 'online').length;
     const offlineCount = deviceList.filter((d) => d.status === 'offline').length;
     const disabledCount = deviceList.filter((d) => d.status === 'disabled' || d.isActive === false).length;
@@ -38,6 +39,7 @@ export const useDevices = () => {
 
     setStats({
       totalCount,
+      pendingCount,
       onlineCount,
       offlineCount,
       disabledCount,
@@ -175,9 +177,16 @@ export const useDevices = () => {
     return await deviceService.pingDevice(deviceId, userName);
   };
 
-  const deleteDevice = async (deviceId) => {
-    await deviceService.deleteDevice(deviceId);
+  const approveDevice = async (deviceId, adminUser) => {
+    const res = await deviceService.approveDevice(deviceId, adminUser);
     await fetchDevices();
+    return res;
+  };
+
+  const rejectDevice = async (deviceId, adminUser, reason) => {
+    const res = await deviceService.rejectDevice(deviceId, adminUser, reason);
+    await fetchDevices();
+    return res;
   };
 
   return {
@@ -199,6 +208,8 @@ export const useDevices = () => {
     fetchDevices,
     createDevice,
     updateDevice,
+    approveDevice,
+    rejectDevice,
     toggleActive,
     regenerateApiKey,
     pingDevice,

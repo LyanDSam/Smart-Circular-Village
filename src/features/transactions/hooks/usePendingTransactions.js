@@ -43,7 +43,7 @@ export const usePendingTransactions = ({ autoOpenModal = false } = {}) => {
         return;
       }
 
-      // 2. Get Officer's assigned device ID
+      // 2. Get Officer's assigned device ID (assignedDeviceId or deviceId)
       const officerDeviceId = (
         currentUser?.assignedDeviceId ||
         currentUser?.deviceId ||
@@ -58,8 +58,8 @@ export const usePendingTransactions = ({ autoOpenModal = false } = {}) => {
 
         const txDeviceId = (item.deviceId || item.device || '').trim().toUpperCase();
 
-        // If Officer has an assigned device ID, transaction MUST match officerDeviceId
-        const matchesDevice = officerDeviceId ? txDeviceId === officerDeviceId : true;
+        // Transaction deviceId MUST match officerDeviceId exactly
+        const matchesDevice = officerDeviceId ? txDeviceId === officerDeviceId : false;
 
         return isWaiting && matchesDevice;
       });

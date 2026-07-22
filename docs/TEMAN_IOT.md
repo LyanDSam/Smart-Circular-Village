@@ -263,3 +263,19 @@ void loop() {
 4. Tempelkan kartu RFID pada pembaca RFID ESP32:
    * ESP32 memanggil `sendPendingTransaction("01020304", 4520)`.
    * **Popup Modal Konfirmasi Setoran** akan langsung terbuka secara otomatis di layar Laptop/Tablet Petugas!
+
+---
+
+## ⏰ 8. Standar Sinkronisasi Waktu Timestamp (NTP Sync — Solusi 1)
+
+Untuk memastikan timestamp konsisten dan portable across all backend endpoints:
+
+- **Alur NTP Sync ESP32**:
+  1. Setelah `wifiConnect()`, panggil `configTime(0, 0, "pool.ntp.org", "time.nist.gov");`.
+  2. Tunggu sampai `time(nullptr)` menghasilkan Unix Epoch timestamp yang valid (`> 1600000000`).
+  3. Simpan flag bahwa NTP time telah tersinkronisasi.
+  4. Seluruh payload timestamp yang dikirim firmware (`heartbeat`, `pending_transactions`, `telemetry`, `log`) menggunakan Unix Epoch integer detik:
+     `lastSeen = time(nullptr)`
+- **Fallback Rule**:
+  Jika sinkronisasi NTP belum/gagal terhubung (misal port NTP diblokir), firmware tetap berjalan menggunakan uptime `millis() / 1000` atau timestamp fallback, dan secara otomatis mencoba resync NTP di background.
+

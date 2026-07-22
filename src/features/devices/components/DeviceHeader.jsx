@@ -2,7 +2,7 @@ import React from 'react';
 import { PageHeader } from '@/components/common/PageHeader';
 import { Button } from '@/components/ui/button';
 import { MetricCard } from '@/components/dashboard/MetricCard';
-import { Cpu, Plus, Wifi, Sprout, Scale, LayoutGrid, Table } from 'lucide-react';
+import { Cpu, Plus, Wifi, Sprout, Scale, LayoutGrid, Table, Clock } from 'lucide-react';
 
 export const DeviceHeader = ({
   stats = {},
@@ -56,13 +56,20 @@ export const DeviceHeader = ({
       />
 
       {/* Device Overview Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
         <MetricCard
           title="Total Perangkat"
           value={stats.totalCount || 0}
           subtext="IoT ESP32 terdaftar"
           icon={Cpu}
           color="emerald"
+        />
+        <MetricCard
+          title="Pending Verifikasi"
+          value={stats.pendingCount || 0}
+          subtext="Menunggu persetujuan admin"
+          icon={Clock}
+          color="amber"
         />
         <MetricCard
           title="Status Online"
@@ -83,7 +90,7 @@ export const DeviceHeader = ({
           value={stats.stationsCount || 0}
           subtext="Station timbangan RFID"
           icon={Scale}
-          color="amber"
+          color="rose"
         />
       </div>
     </div>

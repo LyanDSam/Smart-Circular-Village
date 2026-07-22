@@ -10,6 +10,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '@/firebase/firestore';
+import { deviceService } from '@/services/deviceService';
 
 /**
  * userService — Firestore-only user management operations.
@@ -271,10 +272,45 @@ export const userService = {
 
   /**
    * Assign or update assignedDeviceId for an Officer user document in Firestore.
+   * Enforces 1-to-1 Uniqueness Rule: One Device -> One active Officer.
    */
   async assignDeviceToOfficer(uid, deviceId) {
     if (!uid) throw new Error('ID Petugas tidak valid.');
     const cleanDeviceId = (deviceId || '').trim().toUpperCase();
+
+    // Validate device status & 1-to-1 uniqueness if deviceId is provided
+    if (cleanDeviceId) {
+      // 1. Ensure device is approved before assignment
+      const targetDevice = await deviceService.getDeviceById(cleanDeviceId);
+      if (targetDevice) {
+        if (targetDevice.approvalStatus === 'pending' || targetDevice.status === 'pending') {
+          throw new Error(
+            `Perangkat "${cleanDeviceId}" masih berstatus Pending Verifikasi dan belum dapat ditugaskan ke petugas.`
+          );
+        }
+        if (targetDevice.approvalStatus === 'rejected' || targetDevice.status === 'rejected') {
+          throw new Error(
+            `Perangkat "${cleanDeviceId}" berstatus Ditolak dan tidak dapat ditugaskan ke petugas.`
+          );
+        }
+      }
+
+      // 2. Check if another active officer is already assigned to this device ID
+      const { users: allOfficers } = await this.getUsers({ role: 'officer', pageSize: 10000 });
+      const otherAssignedOfficer = allOfficers.find(
+        (u) =>
+          u.uid !== uid &&
+          !u.isDeleted &&
+          u.status === 'active' &&
+          ((u.assignedDeviceId || u.deviceId || '').trim().toUpperCase() === cleanDeviceId)
+      );
+
+      if (otherAssignedOfficer) {
+        throw new Error(
+          `Perangkat ${cleanDeviceId} sudah ditugaskan ke petugas "${otherAssignedOfficer.fullName || otherAssignedOfficer.email}". Satu perangkat hanya dapat ditugaskan ke satu petugas aktif.`
+        );
+      }
+    }
 
     const uRef = doc(db, 'users', uid);
     await updateDoc(uRef, {

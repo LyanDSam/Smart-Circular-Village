@@ -19,6 +19,8 @@ import {
   ExternalLink,
   Activity,
   Bell,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 
 export const DeviceCard = ({
@@ -29,6 +31,8 @@ export const DeviceCard = ({
   onRegenerateKey,
   onToggleActive,
   onPing,
+  onApprove,
+  onReject,
   onDelete,
 }) => {
   const [showApiKey, setShowApiKey] = useState(false);
@@ -36,6 +40,7 @@ export const DeviceCard = ({
   const [menuOpen, setMenuOpen] = useState(false);
 
   const isCompost = (device.deviceType || device.type) === 'compost';
+  const isPending = device.approvalStatus === 'pending' || device.status === 'pending';
   const Icon = isCompost ? Sprout : Scale;
 
   const maskApiKey = (key) => {
@@ -142,26 +147,50 @@ export const DeviceCard = ({
 
       {/* Action Footer */}
       <div className="p-3 bg-slate-50/60 dark:bg-slate-900/60 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onViewDetail(device)}
-          className="flex-1 text-xs font-semibold h-8 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-        >
-          <ExternalLink className="w-3.5 h-3.5 mr-1" /> Detail
-        </Button>
+        {canManage && isPending ? (
+          <div className="flex items-center gap-1.5 flex-1">
+            <Button
+              size="sm"
+              onClick={() => onApprove && onApprove(device)}
+              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8 gap-1"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>Setujui</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onReject && onReject(device)}
+              className="flex-1 border-rose-200 dark:border-rose-900 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 font-bold text-xs h-8 gap-1"
+            >
+              <XCircle className="w-3.5 h-3.5" />
+              <span>Tolak</span>
+            </Button>
+          </div>
+        ) : (
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onViewDetail(device)}
+              className="flex-1 text-xs font-semibold h-8 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+            >
+              <ExternalLink className="w-3.5 h-3.5 mr-1" /> Detail
+            </Button>
 
-        {canManage && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onPing && onPing(device)}
-            className="text-xs font-bold h-8 border-amber-200 dark:border-amber-900/60 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 gap-1"
-            title="Kirim Sinyal Ping (Bunyikan Buzzer Hardware)"
-          >
-            <Bell className="w-3.5 h-3.5" />
-            <span>Ping</span>
-          </Button>
+            {canManage && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onPing && onPing(device)}
+                className="text-xs font-bold h-8 border-amber-200 dark:border-amber-900/60 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 gap-1"
+                title="Kirim Sinyal Ping (Bunyikan Buzzer Hardware)"
+              >
+                <Bell className="w-3.5 h-3.5" />
+                <span>Ping</span>
+              </Button>
+            )}
+          </>
         )}
 
         {canManage && (
