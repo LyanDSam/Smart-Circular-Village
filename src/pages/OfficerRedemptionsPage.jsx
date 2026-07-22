@@ -121,7 +121,7 @@ export const OfficerRedemptionsPage = () => {
         isAnonymousMode,
         officerRealName
       );
-      showToast(`📸 Foto bukti tersimpan & sinyal konfirmasi dikirim ke warga ${redemption.userName}!`);
+      showToast(`Foto bukti tersimpan. Sinyal konfirmasi dikirim ke layar warga ${redemption.userName}.`);
       setProofPhotoModalOpen(false);
       setTargetForPhoto(null);
       fetchRedemptionsData();
@@ -145,7 +145,7 @@ export const OfficerRedemptionsPage = () => {
         setActionLoading(true);
         try {
           await rewardService.confirmRedemption(redId, userProfile?.uid || user?.uid || 'officer');
-          showToast(`🎉 Transaksi Selesai! Penukaran "${redemption.rewardName}" oleh ${redemption.userName} berhasil dan poin telah dipotong!`);
+          showToast(`Transaksi selesai. Penukaran "${redemption.rewardName}" oleh ${redemption.userName} berhasil dan poin telah dipotong.`);
           fetchRedemptionsData();
         } catch (err) {
           showToast(err.message || 'Gagal mengonfirmasi penukaran.', 'error');
@@ -432,7 +432,7 @@ export const OfficerRedemptionsPage = () => {
                       {isCompleted && (
                         <Badge variant="success" className="gap-1 text-[10px]">
                           <CheckCircle2 className="w-3 h-3" />
-                          <span>🎉 Selesai & Diklaim (Kedua Pihak)</span>
+                          <span>Selesai — Diklaim Kedua Pihak</span>
                         </Badge>
                       )}
                       {isRejected && (
@@ -455,22 +455,26 @@ export const OfficerRedemptionsPage = () => {
                       <span>Tgl: {new Date(red.createdAt?.seconds ? red.createdAt.seconds * 1000 : red.createdAt || Date.now()).toLocaleDateString('id-ID')}</span>
                     </div>
 
-                    {/* Show Photo Proof Preview if Available */}
+                    {/* Proof Photo — clearly visible in officer/admin card */}
                     {red.proofImageUrl && (
-                      <div className="pt-2 flex items-center gap-3">
-                        <img
-                          src={red.proofImageUrl}
-                          alt="Foto Bukti Penyerahan"
-                          className="w-16 h-12 object-cover rounded-xl border border-slate-300 dark:border-slate-700 shadow-xs cursor-pointer hover:scale-105 transition-transform"
+                      <div className="pt-3 space-y-1.5">
+                        <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1">
+                          <Camera className="w-3.5 h-3.5" />
+                          Foto Bukti Penyerahan
+                        </span>
+                        <div
+                          className="w-full h-36 bg-slate-950 rounded-xl overflow-hidden border border-slate-300 dark:border-slate-700 shadow-inner cursor-pointer hover:opacity-90 transition-opacity"
                           onClick={() => {
                             setSelectedRedemption(red);
                             setTicketModalOpen(true);
                           }}
-                        />
-                        <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
-                          <Camera className="w-3.5 h-3.5" />
-                          <span>Foto Bukti Penyerahan Terlampir</span>
-                        </span>
+                        >
+                          <img
+                            src={red.proofImageUrl}
+                            alt="Foto bukti penyerahan barang"
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
                       </div>
                     )}
 

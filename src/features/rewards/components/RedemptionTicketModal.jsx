@@ -10,7 +10,7 @@ import {
   CheckCircle2,
   XCircle,
   X,
-  Sparkles,
+  Info,
   UserCheck,
   PackageCheck,
   Loader2,
@@ -36,7 +36,7 @@ export const RedemptionTicketModal = ({ isOpen, onClose, redemption: initialRede
     const unsubscribe = rewardService.listenToRedemption(redId, (latestData) => {
       setRedemption((prev) => {
         if (prev?.status !== latestData.status) {
-          playChime(); // Play sound effect on status change
+          playChime();
         }
         return { ...prev, ...latestData };
       });
@@ -80,42 +80,44 @@ export const RedemptionTicketModal = ({ isOpen, onClose, redemption: initialRede
         {/* Modal Header */}
         <div className="p-6 pb-4 border-b border-slate-100 dark:border-slate-800 text-center space-y-2 shrink-0">
           <div className={`inline-flex p-3 rounded-2xl mb-1 ${
-            isCompleted ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400'
+            isCompleted
+              ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400'
+              : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400'
           }`}>
             {isCompleted ? <PackageCheck className="w-7 h-7" /> : <Gift className="w-6 h-6" />}
           </div>
           <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">
             Voucher Penukaran Reward
           </h3>
-          <div className="flex items-center justify-center gap-2">
+          <div className="flex items-center justify-center gap-2 flex-wrap">
             {isPending && (
               <Badge variant="warning" className="gap-1 text-xs px-3 py-1">
                 <Clock className="w-3.5 h-3.5 animate-spin" />
-                <span>1. Tunjukkan QR ke Petugas</span>
+                <span>Langkah 1 — Tunjukkan QR ke Petugas</span>
               </Badge>
             )}
             {isAwaitingConfirmation && (
-              <Badge className="bg-amber-500 text-white gap-1 text-xs px-3 py-1 animate-bounce">
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>2. Konfirmasi Penerimaan Warga</span>
+              <Badge className="bg-amber-500 text-white gap-1 text-xs px-3 py-1 animate-pulse">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Langkah 2 — Konfirmasi Penerimaan Barang</span>
               </Badge>
             )}
             {isCitizenConfirmed && (
               <Badge className="bg-blue-600 text-white gap-1 text-xs px-3 py-1">
                 <Clock className="w-3.5 h-3.5 animate-spin" />
-                <span>3. Memproses Potong Poin</span>
+                <span>Langkah 3 — Memproses Pemotongan Poin</span>
               </Badge>
             )}
             {isCompleted && (
-              <Badge variant="success" className="gap-1 text-xs px-3 py-1 bg-emerald-600 text-white font-bold">
+              <Badge className="bg-emerald-600 text-white gap-1 text-xs px-3 py-1 font-bold">
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>🎉 TRANSAKSI BERHASIL & DITERIMA</span>
+                <span>Transaksi Berhasil dan Selesai</span>
               </Badge>
             )}
             {isRejected && (
               <Badge variant="destructive" className="gap-1 text-xs px-3 py-1">
                 <XCircle className="w-3.5 h-3.5" />
-                <span>Ditolak</span>
+                <span>Ditolak oleh Petugas</span>
               </Badge>
             )}
           </div>
@@ -123,52 +125,74 @@ export const RedemptionTicketModal = ({ isOpen, onClose, redemption: initialRede
 
         {/* Modal Content Body */}
         <div className="p-6 space-y-5 overflow-y-auto">
-          {/* SUCCESS MARKER (When completed) */}
+
+          {/* SUCCESS MARKER */}
           {isCompleted && (
-            <div className="p-4 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-900 rounded-2xl text-center space-y-1.5 animate-in zoom-in-95 duration-200">
-              <div className="w-12 h-12 bg-emerald-600 text-white rounded-full flex items-center justify-center mx-auto shadow-md">
-                <CheckCircle2 className="w-7 h-7" />
+            <div className="p-5 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-900 rounded-2xl text-center space-y-2 animate-in zoom-in-95 duration-200">
+              <div className="w-14 h-14 bg-emerald-600 text-white rounded-full flex items-center justify-center mx-auto shadow-md">
+                <CheckCircle2 className="w-8 h-8" />
               </div>
               <h4 className="font-extrabold text-emerald-900 dark:text-emerald-200 text-base">
-                Penukaran Poin Berhasil!
+                Penukaran Poin Berhasil
               </h4>
               <p className="text-xs text-emerald-700 dark:text-emerald-300">
-                Poin Anda telah dipotong sebesar <strong>{redemption.pointsRequired} Pts</strong>. Terima kasih telah mendukung program desa bersih SCV!
+                Poin Anda telah dipotong sebesar <strong>{redemption.pointsRequired} Pts</strong>. Terima kasih telah mendukung program desa bersih SCV.
               </p>
+              {/* Proof photo — also visible after completion */}
+              {redemption.proofImageUrl && (
+                <div className="mt-3 space-y-1.5 text-left">
+                  <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1">
+                    <Camera className="w-3.5 h-3.5" />
+                    Foto Bukti Penyerahan Barang
+                  </span>
+                  <div className="w-full h-40 bg-slate-900 rounded-xl overflow-hidden border border-emerald-300 dark:border-emerald-800">
+                    <img
+                      src={redemption.proofImageUrl}
+                      alt="Bukti penyerahan barang dari petugas"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
-          {/* DUAL-CONFIRMATION HANDSHAKE (When Officer requests receipt) */}
+          {/* DUAL-CONFIRMATION HANDSHAKE — Citizen confirmation step */}
           {isAwaitingConfirmation && (
             <div className="p-4 bg-amber-50 dark:bg-amber-950/60 border-2 border-amber-400 dark:border-amber-700 rounded-2xl space-y-3 animate-in zoom-in-95 duration-200 shadow-md">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-amber-500 text-white rounded-xl shrink-0">
-                  <ShieldCheck className="w-6 h-6" />
+              <div className="flex items-start gap-3">
+                <div className="p-2.5 bg-amber-500 text-white rounded-xl shrink-0 mt-0.5">
+                  <ShieldCheck className="w-5 h-5" />
                 </div>
                 <div>
                   <h4 className="font-extrabold text-amber-900 dark:text-amber-200 text-sm">
-                    Konfirmasi Penyerahan Fisik Barang
+                    Konfirmasi Penerimaan Fisik Barang
                   </h4>
-                  <p className="text-xs text-amber-800 dark:text-amber-300">
-                    Petugas <strong className="text-slate-900 dark:text-slate-100">{redemption.officerName || 'Station'}</strong> sedang menyerahkan barang <strong>"{redemption.rewardName}"</strong>.
+                  <p className="text-xs text-amber-800 dark:text-amber-300 mt-0.5">
+                    Petugas <strong className="text-slate-900 dark:text-slate-100">{redemption.officerName || 'Station'}</strong> sedang menyerahkan barang <strong>"{redemption.rewardName}"</strong>. Pastikan barang sudah ada di tangan Anda sebelum mengonfirmasi.
                   </p>
                 </div>
               </div>
 
-              {/* Photo Proof Taken by Officer */}
-              {redemption.proofImageUrl && (
-                <div className="space-y-1 pt-1">
+              {/* Proof photo from officer — shown prominently to citizen */}
+              {redemption.proofImageUrl ? (
+                <div className="space-y-1.5">
                   <span className="text-[11px] font-bold text-amber-900 dark:text-amber-200 flex items-center gap-1">
                     <Camera className="w-3.5 h-3.5 text-amber-600" />
-                    <span>Foto Bukti Penyerahan dari Petugas:</span>
+                    Foto Bukti Penyerahan dari Petugas
                   </span>
-                  <div className="w-full h-44 bg-slate-950 rounded-xl overflow-hidden border border-amber-300 dark:border-amber-800 shadow-inner">
+                  <div className="w-full h-52 bg-slate-950 rounded-xl overflow-hidden border-2 border-amber-300 dark:border-amber-700 shadow-inner">
                     <img
                       src={redemption.proofImageUrl}
-                      alt="Foto Bukti Penyerahan Petugas"
+                      alt="Foto bukti penyerahan barang dari petugas"
                       className="w-full h-full object-cover"
                     />
                   </div>
+                </div>
+              ) : (
+                <div className="p-2.5 bg-amber-100 dark:bg-amber-950 border border-amber-300 dark:border-amber-800 rounded-xl text-[11px] text-amber-800 dark:text-amber-400 flex items-center gap-1.5">
+                  <Camera className="w-3.5 h-3.5 shrink-0" />
+                  <span>Petugas sedang mengambil foto bukti penyerahan...</span>
                 </div>
               )}
 
@@ -185,28 +209,28 @@ export const RedemptionTicketModal = ({ isOpen, onClose, redemption: initialRede
                 ) : (
                   <>
                     <PackageCheck className="w-5 h-5" />
-                    <span>Ya, Saya Sudah Menerima Barang Fisik</span>
+                    <span>Ya, Saya Sudah Menerima Barang Secara Fisik</span>
                   </>
                 )}
               </Button>
             </div>
           )}
 
-          {/* CITIZEN CONFIRMED STATE */}
+          {/* CITIZEN CONFIRMED — waiting for officer to finalize */}
           {isCitizenConfirmed && (
             <div className="p-4 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-900 rounded-2xl text-center space-y-1.5 animate-in zoom-in-95 duration-200">
               <Clock className="w-8 h-8 text-blue-600 animate-spin mx-auto" />
               <h4 className="font-bold text-blue-900 dark:text-blue-200 text-sm">
-                Penerimaan Barang Terkonfirmasi!
+                Penerimaan Barang Terkonfirmasi
               </h4>
               <p className="text-xs text-blue-700 dark:text-blue-300">
-                Menunggu petugas menyelesaikan pemotongan poin secara atomik...
+                Menunggu petugas menyelesaikan pemotongan poin secara atomik di sistemnya.
               </p>
             </div>
           )}
 
-          {/* Voucher QR Code */}
-          {!isCompleted && (
+          {/* QR Code — shown when status is pending or awaiting (officer needs to scan) */}
+          {(isPending || isAwaitingConfirmation) && (
             <VoucherQRCode value={redemption.redemptionId} size={170} />
           )}
 
@@ -251,12 +275,12 @@ export const RedemptionTicketModal = ({ isOpen, onClose, redemption: initialRede
             )}
           </div>
 
-          {/* Citizen Guidance Notice */}
+          {/* Citizen Guidance Notice — only when pending */}
           {isPending && (
-            <div className="p-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-xl text-xs text-blue-800 dark:text-blue-300 flex items-start gap-2">
-              <Sparkles className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+            <div className="p-3 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-700 dark:text-slate-300 flex items-start gap-2">
+              <Info className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
               <span>
-                Tunjukkan QR Code / Redemption ID ini kepada petugas di Pos Bank Sampah untuk mengambil barang reward Anda.
+                Tunjukkan QR Code atau Redemption ID ini kepada petugas di Pos Bank Sampah untuk mengambil barang reward Anda.
               </span>
             </div>
           )}
@@ -265,7 +289,7 @@ export const RedemptionTicketModal = ({ isOpen, onClose, redemption: initialRede
         {/* Modal Footer */}
         <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 shrink-0">
           <Button onClick={onClose} variant="outline" className="w-full text-xs h-10 font-bold">
-            Tutup Ticket
+            Tutup Tiket
           </Button>
         </div>
       </div>
