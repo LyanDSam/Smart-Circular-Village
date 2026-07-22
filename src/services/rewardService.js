@@ -10,6 +10,7 @@ import {
   where,
   increment,
   serverTimestamp,
+  onSnapshot,
 } from 'firebase/firestore';
 import { db } from '@/firebase/firestore';
 
@@ -193,6 +194,71 @@ export const rewardService = {
   },
 
   /**
+   * Real-time listener for a single redemption document.
+   */
+  listenToRedemption(redemptionId, callback) {
+    if (!redemptionId) return () => {};
+    const ref = doc(db, 'reward_redemptions', redemptionId);
+    return onSnapshot(
+      ref,
+      (snap) => {
+        if (snap.exists()) {
+          callback({ id: snap.id, ...snap.data() });
+        }
+      },
+      (err) => console.error('Redemption listener error:', err)
+    );
+  },
+
+  /**
+   * Officer scans QR & requests physical confirmation from Citizen.
+   * Changes status -> 'awaiting_confirmation'.
+   */
+  async requestOfficerVerification(redemptionId, officerId, officerName = 'Petugas Station', proofImageUrl = null, isAnonymous = false, officerRealName = null) {
+    if (!redemptionId) throw new Error('Redemption ID required.');
+    const redRef = doc(db, 'reward_redemptions', redemptionId);
+    const redSnap = await getDoc(redRef);
+    if (!redSnap.exists()) throw new Error(`Voucher penukaran "${redemptionId}" tidak ditemukan.`);
+
+    const data = redSnap.data();
+    if (data.status === 'completed') throw new Error('Penukaran ini sudah selesai.');
+    if (data.status === 'rejected') throw new Error('Penukaran ini telah ditolak.');
+
+    // Public-facing name: 'Anonim' if anonymous mode is on, else officer's real name
+    const publicName = isAnonymous ? 'Anonim' : (officerName || 'Petugas Station');
+
+    const updatePayload = {
+      status: 'awaiting_confirmation',
+      officerId: officerId || 'officer',
+      officerName: publicName,          // Shown publicly to citizen
+      officerRealName: officerRealName || officerName || 'Petugas Station', // Always real, admin only
+      officerIsAnonymous: Boolean(isAnonymous),
+      verificationRequestedAt: serverTimestamp(),
+    };
+
+    if (proofImageUrl) {
+      updatePayload.proofImageUrl = proofImageUrl;
+    }
+
+    await updateDoc(redRef, updatePayload);
+    return true;
+  },
+
+  /**
+   * Citizen confirms physical receipt of the reward item on their screen.
+   * Changes status -> 'citizen_confirmed'.
+   */
+  async confirmCitizenReceipt(redemptionId) {
+    if (!redemptionId) throw new Error('Redemption ID required.');
+    const redRef = doc(db, 'reward_redemptions', redemptionId);
+    await updateDoc(redRef, {
+      status: 'citizen_confirmed',
+      citizenConfirmedAt: serverTimestamp(),
+    });
+    return true;
+  },
+
+  /**
    * Confirm redemption request via Atomic WriteBatch.
    * Performs:
    * 1. Update `reward_redemptions/{redemptionId}` status -> 'completed', completedAt, officerId
@@ -235,7 +301,7 @@ export const rewardService = {
     // Atomic WriteBatch execution
     const batch = writeBatch(db);
 
-    // 1. Update redemption status to completed
+    // 1. Update redemption status to completed (preserve officerName/officerRealName already set by requestOfficerVerification)
     batch.update(redRef, {
       status: 'completed',
       officerId: officerId || 'officer',

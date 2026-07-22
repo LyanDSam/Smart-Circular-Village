@@ -6,6 +6,7 @@ import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { PromptDialog } from '@/components/common/PromptDialog';
 import { QrCodeScannerModal } from '@/features/rewards/components/QrCodeScannerModal';
 import { RedemptionTicketModal } from '@/features/rewards/components/RedemptionTicketModal';
+import { ProofPhotoModal } from '@/features/rewards/components/ProofPhotoModal';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,6 +24,11 @@ import {
   Ticket,
   AlertCircle,
   Sparkles,
+  PackageCheck,
+  ShieldCheck,
+  Camera,
+  EyeOff,
+  Eye,
 } from 'lucide-react';
 
 export const OfficerRedemptionsPage = () => {
@@ -45,6 +51,15 @@ export const OfficerRedemptionsPage = () => {
   const [ticketModalOpen, setTicketModalOpen] = useState(false);
   const [selectedRedemption, setSelectedRedemption] = useState(null);
   const [feedback, setFeedback] = useState(null); // { type: 'success' | 'error', text: '' }
+
+  // Photo Capture Modal State
+  const [proofPhotoModalOpen, setProofPhotoModalOpen] = useState(false);
+  const [targetForPhoto, setTargetForPhoto] = useState(null);
+
+  // Anonymous Officer Mode
+  const [isAnonymousMode, setIsAnonymousMode] = useState(false);
+  const officerRealName = userProfile?.fullName || userProfile?.displayName || user?.displayName || 'Petugas Station';
+  const officerPublicName = isAnonymousMode ? 'Anonim' : officerRealName;
 
   // Custom Confirm & Prompt Dialog States
   const [confirmDialog, setConfirmDialog] = useState({
@@ -84,20 +99,53 @@ export const OfficerRedemptionsPage = () => {
     fetchRedemptionsData();
   }, []);
 
-  // Officer confirms redemption via Atomic WriteBatch with ConfirmDialog
-  const promptConfirmRedemption = (redemption) => {
+  // Open Proof Photo Camera for a redemption
+  const handleOpenPhotoCapture = (redemption) => {
+    setTargetForPhoto(redemption);
+    setProofPhotoModalOpen(true);
+  };
+
+  // Called after photo is snapped by Officer
+  const handlePhotoCaptured = async (proofImageUrl) => {
+    if (!targetForPhoto) return;
+    const redemption = targetForPhoto;
+    const redId = redemption.redemptionId || redemption.id;
+
+    setActionLoading(true);
+    try {
+      await rewardService.requestOfficerVerification(
+        redId,
+        userProfile?.uid || user?.uid || 'officer',
+        officerPublicName,
+        proofImageUrl,
+        isAnonymousMode,
+        officerRealName
+      );
+      showToast(`📸 Foto bukti tersimpan & sinyal konfirmasi dikirim ke warga ${redemption.userName}!`);
+      setProofPhotoModalOpen(false);
+      setTargetForPhoto(null);
+      fetchRedemptionsData();
+    } catch (err) {
+      showToast(err.message || 'Gagal menyimpan foto bukti.', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // STEP 2: Officer executes final atomic WriteBatch write (deducts points & stock)
+  const promptExecuteFinalRedemption = (redemption) => {
     const redId = redemption.redemptionId || redemption.id;
     setConfirmDialog({
       isOpen: true,
-      title: `Konfirmasi Penukaran "${redemption.rewardName}"?`,
-      description: `Konfirmasi penukaran untuk warga ${redemption.userName}. Poin (${redemption.pointsRequired} Pts) dan stok barang akan dipotong secara atomik dari database.`,
-      confirmText: 'Ya, Konfirmasi & Potong Poin',
+      title: `Selesaikan & Potong Poin (${redemption.pointsRequired} Pts)?`,
+      description: `Warga ${redemption.userName} telah mengonfirmasi penerimaan barang fisik beserta foto bukti. Klik konfirmasi untuk memotong poin dan stok secara atomik.`,
+      confirmText: 'Selesaikan & Potong Poin Atomik',
       variant: 'success',
       onConfirm: async () => {
         setActionLoading(true);
         try {
           await rewardService.confirmRedemption(redId, userProfile?.uid || user?.uid || 'officer');
-          showToast(`Penukaran "${redemption.rewardName}" oleh ${redemption.userName} berhasil dikonfirmasi!`);
+          showToast(`🎉 Transaksi Selesai! Penukaran "${redemption.rewardName}" oleh ${redemption.userName} berhasil dan poin telah dipotong!`);
           fetchRedemptionsData();
         } catch (err) {
           showToast(err.message || 'Gagal mengonfirmasi penukaran.', 'error');
@@ -136,14 +184,19 @@ export const OfficerRedemptionsPage = () => {
   };
 
   // Handle Scanned Redemption ID from Scanner Modal
-  const handleScannedId = (scannedId) => {
+  const handleScannedId = async (scannedId) => {
     const target = redemptions.find(
       (r) => (r.redemptionId || r.id).toUpperCase() === scannedId.toUpperCase()
     );
     if (target) {
       setSelectedRedemption(target);
       setTicketModalOpen(true);
-      showToast(`Voucher "${scannedId}" ditemukan!`);
+      showToast(`Voucher "${scannedId}" ditemukan! Potret foto bukti penyerahan.`);
+
+      // Auto-open camera modal if pending
+      if (target.status === 'pending') {
+        handleOpenPhotoCapture(target);
+      }
     } else {
       showToast(`Voucher "${scannedId}" tidak ditemukan dalam database.`, 'error');
     }
@@ -157,7 +210,7 @@ export const OfficerRedemptionsPage = () => {
     const queryStr = searchQuery.toLowerCase();
 
     const matchesQuery = idStr.includes(queryStr) || userStr.includes(queryStr) || itemStr.includes(queryStr);
-    const matchesStatus = filterStatus === 'all' || r.status === filterStatus;
+    const matchesStatus = filterStatus === 'all' || r.status === filterStatus || (filterStatus === 'pending' && (r.status === 'pending' || r.status === 'awaiting_confirmation' || r.status === 'citizen_confirmed'));
 
     return matchesQuery && matchesStatus;
   });
@@ -167,10 +220,24 @@ export const OfficerRedemptionsPage = () => {
       {/* Header */}
       <PageHeader
         title="Verifikasi & Klaim Penukaran Reward"
-        description="Scan QR Code voucher warga, verifikasi status, dan konfirmasi penukaran poin secara atomik."
+        description="Scan QR Code voucher warga, potret foto bukti penyerahan barang dengan kamera, lalu potong poin secara atomik."
         icon={Gift}
       >
         <div className="flex items-center gap-2">
+          {/* Anonymous Mode Toggle */}
+          <button
+            onClick={() => setIsAnonymousMode((prev) => !prev)}
+            title={isAnonymousMode ? `Mode Anonim Aktif — Anda tampil sebagai "Anonim" ke warga` : `Mode Normal — Anda tampil sebagai "${officerRealName}"`}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+              isAnonymousMode
+                ? 'bg-slate-800 text-white border-slate-700 dark:bg-slate-700'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            {isAnonymousMode ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            <span>{isAnonymousMode ? 'Anonim' : officerRealName}</span>
+          </button>
+
           <Button
             onClick={() => setScannerOpen(true)}
             className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs gap-1.5 h-9 font-bold shadow-xs"
@@ -280,7 +347,7 @@ export const OfficerRedemptionsPage = () => {
                 : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
             }`}
           >
-            Pending
+            Pending / Handshake
           </button>
           <button
             onClick={() => setFilterStatus('completed')}
@@ -328,6 +395,8 @@ export const OfficerRedemptionsPage = () => {
           {filteredList.map((red) => {
             const redId = red.redemptionId || red.id;
             const isPending = red.status === 'pending';
+            const isAwaitingConfirmation = red.status === 'awaiting_confirmation';
+            const isCitizenConfirmed = red.status === 'citizen_confirmed';
             const isCompleted = red.status === 'completed';
             const isRejected = red.status === 'rejected';
 
@@ -345,13 +414,25 @@ export const OfficerRedemptionsPage = () => {
                       {isPending && (
                         <Badge variant="warning" className="gap-1 text-[10px]">
                           <Clock className="w-3 h-3 animate-spin" />
-                          <span>Pending Konfirmasi</span>
+                          <span>1. Menunggu Potret Bukti</span>
+                        </Badge>
+                      )}
+                      {isAwaitingConfirmation && (
+                        <Badge className="bg-amber-500 text-white gap-1 text-[10px] animate-pulse">
+                          <ShieldCheck className="w-3 h-3" />
+                          <span>2. Menunggu Konfirmasi HP Warga</span>
+                        </Badge>
+                      )}
+                      {isCitizenConfirmed && (
+                        <Badge className="bg-blue-600 text-white gap-1 text-[10px] animate-bounce">
+                          <PackageCheck className="w-3 h-3" />
+                          <span>3. Warga Sudah Konfirmasi (Siap Potong Poin)</span>
                         </Badge>
                       )}
                       {isCompleted && (
                         <Badge variant="success" className="gap-1 text-[10px]">
                           <CheckCircle2 className="w-3 h-3" />
-                          <span>Selesai & Diklaim</span>
+                          <span>🎉 Selesai & Diklaim (Kedua Pihak)</span>
                         </Badge>
                       )}
                       {isRejected && (
@@ -374,6 +455,42 @@ export const OfficerRedemptionsPage = () => {
                       <span>Tgl: {new Date(red.createdAt?.seconds ? red.createdAt.seconds * 1000 : red.createdAt || Date.now()).toLocaleDateString('id-ID')}</span>
                     </div>
 
+                    {/* Show Photo Proof Preview if Available */}
+                    {red.proofImageUrl && (
+                      <div className="pt-2 flex items-center gap-3">
+                        <img
+                          src={red.proofImageUrl}
+                          alt="Foto Bukti Penyerahan"
+                          className="w-16 h-12 object-cover rounded-xl border border-slate-300 dark:border-slate-700 shadow-xs cursor-pointer hover:scale-105 transition-transform"
+                          onClick={() => {
+                            setSelectedRedemption(red);
+                            setTicketModalOpen(true);
+                          }}
+                        />
+                        <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
+                          <Camera className="w-3.5 h-3.5" />
+                          <span>Foto Bukti Penyerahan Terlampir</span>
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Officer name — visible in admin panel (shows real name even if anonymous) */}
+                    {(red.officerName || red.officerRealName) && (
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 pt-0.5">
+                        <ShieldCheck className="w-3.5 h-3.5 text-blue-500" />
+                        <span>Verifikator:</span>
+                        <span className="font-bold text-slate-800 dark:text-slate-200">
+                          {red.officerRealName || red.officerName}
+                        </span>
+                        {red.officerIsAnonymous && (
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded text-[10px] font-bold">
+                            <EyeOff className="w-3 h-3" />
+                            <span>Anonim ke Warga</span>
+                          </span>
+                        )}
+                      </div>
+                    )}
+
                     {isRejected && red.rejectionReason && (
                       <p className="text-xs italic text-rose-600 dark:text-rose-400 pt-1">
                         Alasan penolakan: "{red.rejectionReason}"
@@ -381,7 +498,7 @@ export const OfficerRedemptionsPage = () => {
                     )}
                   </div>
 
-                  {/* Action Buttons */}
+                  {/* Interactive Action Buttons */}
                   <div className="flex items-center gap-2 shrink-0">
                     <Button
                       onClick={() => {
@@ -396,29 +513,57 @@ export const OfficerRedemptionsPage = () => {
                       <span>Detail Ticket</span>
                     </Button>
 
+                    {/* Step 1 -> Open camera to take proof photo & request confirmation */}
                     {isPending && (
-                      <>
-                        <Button
-                          onClick={() => promptConfirmRedemption(red)}
-                          disabled={actionLoading}
-                          size="sm"
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-9 gap-1 font-bold shadow-xs"
-                        >
-                          <CheckCircle2 className="w-4 h-4" />
-                          <span>Konfirmasi Penukaran</span>
-                        </Button>
+                      <Button
+                        onClick={() => handleOpenPhotoCapture(red)}
+                        disabled={actionLoading}
+                        size="sm"
+                        className="bg-amber-600 hover:bg-amber-700 text-white text-xs h-9 gap-1.5 font-bold shadow-xs"
+                      >
+                        <Camera className="w-4 h-4" />
+                        <span>Potret Bukti Penyerahan</span>
+                      </Button>
+                    )}
 
-                        <Button
-                          onClick={() => promptRejectRedemption(red)}
-                          disabled={actionLoading}
-                          variant="destructive"
-                          size="sm"
-                          className="text-xs h-9 gap-1"
-                        >
-                          <XCircle className="w-4 h-4" />
-                          <span>Tolak</span>
-                        </Button>
-                      </>
+                    {/* Step 2 -> Retake photo or re-request */}
+                    {isAwaitingConfirmation && (
+                      <Button
+                        onClick={() => handleOpenPhotoCapture(red)}
+                        disabled={actionLoading}
+                        variant="outline"
+                        size="sm"
+                        className="border-amber-300 text-amber-800 dark:text-amber-300 text-xs h-9 gap-1 animate-pulse"
+                      >
+                        <Camera className="w-4 h-4 text-amber-600" />
+                        <span>Foto Ulang Bukti</span>
+                      </Button>
+                    )}
+
+                    {/* Step 3 -> Citizen confirmed receipt, Officer executes final atomic write */}
+                    {(isCitizenConfirmed || isAwaitingConfirmation) && (
+                      <Button
+                        onClick={() => promptExecuteFinalRedemption(red)}
+                        disabled={actionLoading}
+                        size="sm"
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-9 gap-1.5 font-extrabold shadow-md animate-bounce"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>Selesaikan & Potong Poin</span>
+                      </Button>
+                    )}
+
+                    {!isCompleted && !isRejected && (
+                      <Button
+                        onClick={() => promptRejectRedemption(red)}
+                        disabled={actionLoading}
+                        variant="destructive"
+                        size="sm"
+                        className="text-xs h-9 gap-1"
+                      >
+                        <XCircle className="w-4 h-4" />
+                        <span>Tolak</span>
+                      </Button>
                     )}
                   </div>
                 </CardContent>
@@ -433,6 +578,17 @@ export const OfficerRedemptionsPage = () => {
         isOpen={scannerOpen}
         onClose={() => setScannerOpen(false)}
         onScanned={handleScannedId}
+      />
+
+      <ProofPhotoModal
+        isOpen={proofPhotoModalOpen}
+        onClose={() => {
+          setProofPhotoModalOpen(false);
+          setTargetForPhoto(null);
+        }}
+        onCapture={handlePhotoCaptured}
+        rewardName={targetForPhoto?.rewardName}
+        citizenName={targetForPhoto?.userName}
       />
 
       <RedemptionTicketModal
