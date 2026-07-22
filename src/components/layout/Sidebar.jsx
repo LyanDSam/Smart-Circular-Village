@@ -68,7 +68,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
           ) : (
             navItems.map((item) => {
               const Icon = item.icon;
-              const titleText = item.key ? t(item.key) : item.title;
+              const titleText = item.key && t(item.key) !== item.key ? t(item.key) : (item.title || item.key);
               return (
                 <NavLink
                   key={item.path}

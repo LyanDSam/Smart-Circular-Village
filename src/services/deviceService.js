@@ -206,7 +206,7 @@ export const deviceService = {
   },
 
   /**
-   * Fetch single device by Device ID directly from Firestore.
+   * Fetch single device by Device ID directly from Firestore & RTDB.
    */
   async getDeviceById(deviceId) {
     if (!deviceId) return null;
@@ -216,8 +216,21 @@ export const deviceService = {
       const snap = await getDoc(dRef);
       if (snap.exists()) {
         const data = snap.data();
-        const dev = { deviceId: snap.id, deviceType: data.deviceType || data.type, ...data };
-        return { ...dev, status: computeDeviceStatus(dev) };
+        let rtdbData = null;
+        try {
+          rtdbData = await rtdbService.getDevice(deviceId);
+        } catch (e) {
+          // ignore RTDB read errors
+        }
+
+        const dev = {
+          deviceId: snap.id,
+          deviceType: data.deviceType || data.type,
+          ...data,
+          ...(rtdbData || {}),
+        };
+
+        return { ...dev, status: computeDeviceStatus(dev, rtdbData) };
       }
     } catch (err) {
       console.error('Error fetching device from Firestore:', err);

@@ -14,16 +14,16 @@ export const GlobalPendingListener = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
 
-  // Only run for officers and admins
-  const isOfficerOrAdmin =
-    userProfile?.role === 'officer' || userProfile?.role === 'admin';
+  // ONLY run for officers. Administrators must NOT receive transaction popups.
+  const isOfficer = userProfile?.role === 'officer';
 
   // Do not render duplicate modals if currently on /transactions page
   const isOnTransactionsPage =
     location.pathname.startsWith('/transactions') ||
     location.pathname.startsWith('/officer/transactions');
 
-  const enableAutoModal = isOfficerOrAdmin && !isOnTransactionsPage;
+  // Disabled automatic popup modals when transactions arrive as per user instruction
+  const enableAutoModal = false;
 
   const {
     activePending,
@@ -34,7 +34,7 @@ export const GlobalPendingListener = () => {
     handleResumeAfterRfidLinked,
   } = usePendingTransactions({ autoOpenModal: enableAutoModal });
 
-  if (!isOfficerOrAdmin || isOnTransactionsPage) {
+  if (!isOfficer || isOnTransactionsPage) {
     return null;
   }
 

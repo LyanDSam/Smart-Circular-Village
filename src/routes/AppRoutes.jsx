@@ -38,6 +38,8 @@ import { DevicesPage } from '@/pages/DevicesPage';
 import { SmartCompostPage } from '@/pages/SmartCompostPage';
 import { ReportsPage } from '@/pages/ReportsPage';
 
+import { PostsPage } from '@/pages/admin/PostsPage';
+
 // Route Guards
 import { ProtectedRoute } from './ProtectedRoute';
 import { RoleRoute } from './RoleRoute';
@@ -127,6 +129,8 @@ export const AppRoutes = () => {
 
             {/* Admin-Only Routes */}
             <Route element={<RoleRoute allowedRoles={['admin']} />}>
+              <Route path="/admin/posts" element={<PostsPage />} />
+              <Route path="/posts" element={<PostsPage />} />
               <Route path="/admin/users" element={<UsersPage />} />
               <Route path="/admin/users/:uid" element={<UserDetailPage />} />
               <Route path="/users" element={<UsersPage />} />

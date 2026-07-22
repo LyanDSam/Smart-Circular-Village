@@ -37,6 +37,7 @@ export const OFFICER_NAV = [
 
 export const ADMIN_NAV = [
   { title: 'Dashboard', key: 'navDashboard', path: '/dashboard', icon: LayoutDashboard },
+  { title: 'Posko Pengumpulan', key: 'navPosts', path: '/admin/posts', icon: Building2 },
   { title: 'Pengguna', key: 'navUsers', path: '/admin/users', icon: Users },
   { title: 'Petugas', key: 'navOfficers', path: '/admin/officers', icon: ShieldCheck },
   { title: 'Perangkat IoT', key: 'navDevices', path: '/devices', icon: Cpu },

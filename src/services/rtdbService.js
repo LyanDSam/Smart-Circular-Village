@@ -143,6 +143,20 @@ export const rtdbService = {
   },
 
   /**
+   * Fetch single device node from RTDB (`devices/{deviceId}`).
+   */
+  async getDevice(deviceId) {
+    if (!deviceId) return null;
+    try {
+      const devRef = ref(rtdb, `devices/${deviceId}`);
+      const snap = await get(devRef);
+      return snap.exists() ? snap.val() : null;
+    } catch (err) {
+      return null;
+    }
+  },
+
+  /**
    * Listen to live telemetry & heartbeat of a specific device from RTDB (`devices/{deviceId}`).
    */
   listenDeviceTelemetry(deviceId, onUpdateCallback) {

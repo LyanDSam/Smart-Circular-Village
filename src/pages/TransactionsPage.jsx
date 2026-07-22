@@ -51,7 +51,7 @@ export const TransactionsPage = () => {
     closeConfirmationModal,
     closeUnknownRfidModal,
     handleResumeAfterRfidLinked,
-  } = usePendingTransactions({ autoOpenModal: true });
+  } = usePendingTransactions({ autoOpenModal: false });
 
   // Firestore Audit History Hook
   const {

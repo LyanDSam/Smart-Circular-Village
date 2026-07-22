@@ -40,6 +40,9 @@ export const OfficersPage = () => {
   // Dialog State
   const [approveUserTarget, setApproveUserTarget] = useState(null);
   const [rejectUserTarget, setRejectUserTarget] = useState(null);
+  const [assignDeviceTarget, setAssignDeviceTarget] = useState(null);
+  const [newDeviceIdInput, setNewDeviceIdInput] = useState('');
+  const [isAssigningDevice, setIsAssigningDevice] = useState(false);
 
   // Officers Stats
   const [officersStats, setOfficersStats] = useState({
@@ -196,6 +199,7 @@ export const OfficersPage = () => {
                   <TableHead className="text-xs font-semibold text-slate-600 dark:text-slate-400">Role</TableHead>
                   <TableHead className="text-xs font-semibold text-slate-600 dark:text-slate-400">Status Akun</TableHead>
                   <TableHead className="text-xs font-semibold text-slate-600 dark:text-slate-400">Kartu RFID</TableHead>
+                  <TableHead className="text-xs font-semibold text-slate-600 dark:text-slate-400">Perangkat IoT</TableHead>
                   <TableHead className="text-xs font-semibold text-slate-600 dark:text-slate-400 text-right">Aksi</TableHead>
                 </TableRow>
               </TableHeader>
@@ -203,13 +207,13 @@ export const OfficersPage = () => {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-xs text-slate-400">
+                    <TableCell colSpan={8} className="text-center py-8 text-xs text-slate-400">
                       {t('loadingOfficersData')}
                     </TableCell>
                   </TableRow>
                 ) : users.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-12 text-xs text-slate-400">
+                    <TableCell colSpan={8} className="text-center py-12 text-xs text-slate-400">
                       <div className="flex flex-col items-center justify-center space-y-2">
                         <Shield className="w-8 h-8 text-slate-300 dark:text-slate-600" />
                         <p className="font-semibold">Tidak ada data petugas yang ditemukan.</p>
@@ -218,38 +222,50 @@ export const OfficersPage = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  users.map((u) => (
-                    <TableRow key={u.uid} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors border-b border-slate-100 dark:border-slate-800/60">
-                      <TableCell className="font-mono text-xs font-bold text-emerald-700 dark:text-emerald-400">
-                        {u.memberId || 'N/A'}
-                      </TableCell>
+                  users.map((u) => {
+                    const assignedDev = u.assignedDeviceId || u.deviceId || '';
+                    return (
+                      <TableRow key={u.uid} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors border-b border-slate-100 dark:border-slate-800/60">
+                        <TableCell className="font-mono text-xs font-bold text-emerald-700 dark:text-emerald-400">
+                          {u.memberId || 'N/A'}
+                        </TableCell>
 
-                      <TableCell className="font-semibold text-xs text-slate-900 dark:text-slate-100">
-                        {u.fullName}
-                      </TableCell>
+                        <TableCell className="font-semibold text-xs text-slate-900 dark:text-slate-100">
+                          {u.fullName}
+                        </TableCell>
 
-                      <TableCell className="text-xs text-slate-600 dark:text-slate-300">
-                        <div>{u.email}</div>
-                        <div className="text-[11px] text-slate-400 dark:text-slate-500 font-mono">{u.phone || '-'}</div>
-                      </TableCell>
+                        <TableCell className="text-xs text-slate-600 dark:text-slate-300">
+                          <div>{u.email}</div>
+                          <div className="text-[11px] text-slate-400 dark:text-slate-500 font-mono">{u.phone || '-'}</div>
+                        </TableCell>
 
-                      <TableCell>
-                        <RoleBadge role={u.role} />
-                      </TableCell>
+                        <TableCell>
+                          <RoleBadge role={u.role} />
+                        </TableCell>
 
-                      <TableCell>
-                        <StatusBadge status={u.status} />
-                      </TableCell>
+                        <TableCell>
+                          <StatusBadge status={u.status} />
+                        </TableCell>
 
-                      <TableCell className="font-mono text-xs text-slate-700 dark:text-slate-300">
-                        {u.rfidUid ? (
-                          <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700 font-bold text-[11px] text-slate-800 dark:text-slate-200">
-                            {u.rfidUid}
-                          </span>
-                        ) : (
-                          <span className="text-[11px] text-amber-600 dark:text-amber-400 italic">Belum Di-assign</span>
-                        )}
-                      </TableCell>
+                        <TableCell className="font-mono text-xs text-slate-700 dark:text-slate-300">
+                          {u.rfidUid ? (
+                            <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700 font-bold text-[11px] text-slate-800 dark:text-slate-200">
+                              {u.rfidUid}
+                            </span>
+                          ) : (
+                            <span className="text-[11px] text-amber-600 dark:text-amber-400 italic">Belum Di-assign</span>
+                          )}
+                        </TableCell>
+
+                        <TableCell className="font-mono text-xs">
+                          {assignedDev ? (
+                            <span className="px-2 py-0.5 bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 rounded border border-blue-200 dark:border-blue-800 font-bold text-[11px]">
+                              {assignedDev}
+                            </span>
+                          ) : (
+                            <span className="text-[11px] text-slate-400 italic">Tanpa Perangkat</span>
+                          )}
+                        </TableCell>
 
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end space-x-1">
@@ -263,6 +279,19 @@ export const OfficersPage = () => {
                               <Eye className="w-4 h-4" />
                             </Button>
                           </Link>
+
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              setAssignDeviceTarget(u);
+                              setNewDeviceIdInput(u.assignedDeviceId || u.deviceId || '');
+                            }}
+                            className="h-8 w-8 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40"
+                            title="Tugaskan Perangkat IoT"
+                          >
+                            <Cpu className="w-4 h-4" />
+                          </Button>
 
                           {u.status === 'pending' && (
                             <>
@@ -300,8 +329,9 @@ export const OfficersPage = () => {
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
+                  );
+                })
+              )}
               </TableBody>
             </Table>
           </div>
@@ -339,6 +369,67 @@ export const OfficersPage = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Device Assignment Modal */}
+      {assignDeviceTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4 font-sans">
+            <div className="flex items-center space-x-2 text-blue-600 dark:text-blue-400">
+              <Cpu className="w-5 h-5" />
+              <h3 className="font-bold text-base text-slate-900 dark:text-slate-100">
+                Tugaskan Perangkat IoT ke Petugas
+              </h3>
+            </div>
+
+            <p className="text-xs text-slate-600 dark:text-slate-300">
+              Tentukan ID Perangkat IoT (contoh: <code className="font-mono bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-blue-600">SCV-09009</code> atau <code className="font-mono bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-blue-600">SCV-COLL-001</code>) untuk petugas <b>{assignDeviceTarget.fullName}</b>. Petugas hanya akan menerima transaksi real-time dari perangkat ini.
+            </p>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                ID Perangkat IoT (Device ID)
+              </label>
+              <Input
+                type="text"
+                placeholder="misal: SCV-09009 atau SCV-COLL-001"
+                value={newDeviceIdInput}
+                onChange={(e) => setNewDeviceIdInput(e.target.value)}
+                className="text-xs font-mono uppercase bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800"
+              />
+            </div>
+
+            <div className="flex items-center justify-end space-x-3 pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setAssignDeviceTarget(null)}
+                className="text-xs"
+              >
+                Batal
+              </Button>
+              <Button
+                size="sm"
+                disabled={isAssigningDevice}
+                onClick={async () => {
+                  setIsAssigningDevice(true);
+                  try {
+                    await userService.assignDeviceToOfficer(assignDeviceTarget.uid, newDeviceIdInput);
+                    setAssignDeviceTarget(null);
+                    loadData();
+                  } catch (err) {
+                    console.error('Error assigning device to officer:', err);
+                  } finally {
+                    setIsAssigningDevice(false);
+                  }
+                }}
+                className="text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                {isAssigningDevice ? 'Menyimpan...' : 'Simpan Penugasan'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modals */}
       <ApproveDialog

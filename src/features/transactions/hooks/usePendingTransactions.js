@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { rtdbService } from '@/services/rtdbService';
 import { userService } from '@/services/userService';
+import { deviceService } from '@/services/deviceService';
+import { useAuth } from '@/hooks/useAuth';
 
 export const usePendingTransactions = ({ autoOpenModal = false } = {}) => {
+  const { userProfile } = useAuth();
   const [pendingList, setPendingList] = useState([]);
   const [activePending, setActivePending] = useState(null);
   const [unknownRfidPending, setUnknownRfidPending] = useState(null);
@@ -22,23 +25,50 @@ export const usePendingTransactions = ({ autoOpenModal = false } = {}) => {
   const autoOpenModalRef = useRef(autoOpenModal);
   autoOpenModalRef.current = autoOpenModal;
 
+  const userProfileRef = useRef(userProfile);
+  userProfileRef.current = userProfile;
+
   // Subscribe to RTDB pending_transactions in real time via onValue (runs once on mount)
   useEffect(() => {
     setIsLoading(true);
-    console.log('[RTDB Sync] Subscribing to /pending_transactions listener...');
 
     const unsubscribe = rtdbService.listenPendingTransactions(async (items) => {
-      console.log('[RTDB Sync] Incoming pending_transactions snapshot received:', items);
+      const currentUser = userProfileRef.current;
+      const isOfficer = currentUser?.role === 'officer';
 
-      // Filter items: treat missing/undefined status as 'waiting_confirmation' by default
+      // 1. Administrators and Non-Officers NEVER receive popups or store pending transactions in state
+      if (!isOfficer) {
+        setPendingList([]);
+        setIsLoading(false);
+        return;
+      }
+
+      // 2. Get Officer's assigned device ID
+      const officerDeviceId = (
+        currentUser?.assignedDeviceId ||
+        currentUser?.deviceId ||
+        ''
+      ).trim().toUpperCase();
+
+      // 3. Early Filter: Only retain items matching officer's assignedDeviceId
       const activeItems = items.filter((item) => {
         const status = (item.status || '').toLowerCase();
-        return !status || status === 'waiting_confirmation' || status === 'pending' || status === 'processing';
+        const isWaiting =
+          !status || status === 'waiting_confirmation' || status === 'pending' || status === 'processing';
+
+        const txDeviceId = (item.deviceId || item.device || '').trim().toUpperCase();
+
+        // If Officer has an assigned device ID, transaction MUST match officerDeviceId
+        const matchesDevice = officerDeviceId ? txDeviceId === officerDeviceId : true;
+
+        return isWaiting && matchesDevice;
       });
 
-      // Update local state immediately for instant UI responsiveness
+      // Update local state immediately with filtered items
       setPendingList(activeItems);
       setIsLoading(false);
+
+      if (activeItems.length === 0) return;
 
       // Perform direct indexed Firestore queries for RFID lookup
       const newMap = {};
@@ -61,7 +91,7 @@ export const usePendingTransactions = ({ autoOpenModal = false } = {}) => {
 
       setCitizenMap((prev) => ({ ...prev, ...newMap }));
 
-      // Auto-open modal if autoOpenModal is enabled and no modal is currently active
+      // Auto-open modal for Officers if activeItems has items for assigned device
       if (autoOpenModalRef.current && activeItems.length > 0) {
         const latestUnconfirmed = activeItems.find((i) => {
           const st = (i.status || '').toLowerCase();
@@ -71,10 +101,10 @@ export const usePendingTransactions = ({ autoOpenModal = false } = {}) => {
         if (latestUnconfirmed && !activePendingRef.current && !unknownRfidPendingRef.current) {
           const cleanRfid = String(latestUnconfirmed.rfidUid || latestUnconfirmed.uid || '').replace(/\s+/g, '').toUpperCase();
           if (newMap[cleanRfid] || citizenMap[cleanRfid]) {
-            console.log('[RTDB Sync] Auto-opening Confirmation Modal for:', latestUnconfirmed.transactionId);
+            console.log('[RTDB Sync] Auto-opening Confirmation Modal for Officer:', latestUnconfirmed.transactionId);
             setActivePending(latestUnconfirmed);
           } else {
-            console.log('[RTDB Sync] Auto-opening Unknown RFID Modal for:', latestUnconfirmed.transactionId);
+            console.log('[RTDB Sync] Auto-opening Unknown RFID Modal for Officer:', latestUnconfirmed.transactionId);
             setUnknownRfidPending(latestUnconfirmed);
           }
         }
@@ -82,7 +112,6 @@ export const usePendingTransactions = ({ autoOpenModal = false } = {}) => {
     });
 
     return () => {
-      console.log('[RTDB Sync] Unsubscribing from /pending_transactions listener.');
       if (typeof unsubscribe === 'function') unsubscribe();
     };
   }, []);

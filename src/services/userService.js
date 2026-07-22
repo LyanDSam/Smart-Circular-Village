@@ -270,6 +270,23 @@ export const userService = {
   },
 
   /**
+   * Assign or update assignedDeviceId for an Officer user document in Firestore.
+   */
+  async assignDeviceToOfficer(uid, deviceId) {
+    if (!uid) throw new Error('ID Petugas tidak valid.');
+    const cleanDeviceId = (deviceId || '').trim().toUpperCase();
+
+    const uRef = doc(db, 'users', uid);
+    await updateDoc(uRef, {
+      assignedDeviceId: cleanDeviceId,
+      deviceId: cleanDeviceId,
+      updatedAt: serverTimestamp(),
+    });
+
+    return true;
+  },
+
+  /**
    * Calculate User Management Dashboard Metrics from Firestore.
    */
   async getUserStats() {

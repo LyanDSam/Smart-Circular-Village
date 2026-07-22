@@ -42,15 +42,10 @@ export const ConfirmTransactionModal = ({
   const weightGram = pendingItem?.weightGram ?? pendingItem?.weight ?? 0;
   const weightKg = useMemo(() => pointService.formatWeightKg(weightGram), [weightGram]);
 
-  // Query Firestore devices/{deviceId} with in-memory caching
+  // Query fresh device details on modal open
   useEffect(() => {
     if (!isOpen || !deviceId) {
       setDevice(null);
-      return;
-    }
-
-    if (deviceCacheRef.current[deviceId] !== undefined) {
-      setDevice(deviceCacheRef.current[deviceId]);
       return;
     }
 
@@ -61,13 +56,11 @@ export const ConfirmTransactionModal = ({
       .getDeviceById(deviceId)
       .then((dev) => {
         if (!isMounted) return;
-        deviceCacheRef.current[deviceId] = dev;
         setDevice(dev);
       })
       .catch((err) => {
         console.warn(`[ConfirmModal] Error querying device ${deviceId}:`, err);
         if (!isMounted) return;
-        deviceCacheRef.current[deviceId] = null;
         setDevice(null);
       })
       .finally(() => {
@@ -96,10 +89,18 @@ export const ConfirmTransactionModal = ({
     });
   };
 
+  const addressText =
+    device?.location?.address ||
+    device?.address ||
+    (typeof device?.location === 'string' ? device.location : '') ||
+    '-';
+  const villageText = device?.location?.village || device?.village || '-';
+  const deviceNameText = device?.name || device?.deviceName || 'IoT Collection Station';
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+      {/* Header */}
       <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden font-sans">
-        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40">
           <div className="flex items-center space-x-2 text-slate-900 dark:text-slate-100">
             <Scale className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
@@ -141,7 +142,7 @@ export const ConfirmTransactionModal = ({
               <div className="pl-5 space-y-1">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-extrabold text-slate-900 dark:text-slate-100">
-                    {device.name}
+                    {deviceNameText}
                   </p>
                   <span className="font-mono font-semibold text-emerald-600 dark:text-emerald-400 text-xs">
                     {device.deviceId}
@@ -150,11 +151,11 @@ export const ConfirmTransactionModal = ({
                 <div className="text-xs text-slate-600 dark:text-slate-300 space-y-0.5 pt-0.5">
                   <p>
                     <span className="font-medium text-slate-400">Location: </span>
-                    <span className="font-semibold">{device.location?.address || '-'}</span>
+                    <span className="font-semibold">{addressText}</span>
                   </p>
                   <p>
                     <span className="font-medium text-slate-400">Village: </span>
-                    <span className="font-semibold">{device.location?.village || '-'}</span>
+                    <span className="font-semibold">{villageText}</span>
                   </p>
                 </div>
               </div>

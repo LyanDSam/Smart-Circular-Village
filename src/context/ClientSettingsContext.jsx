@@ -120,6 +120,7 @@ export const ClientSettingsProvider = ({ children }) => {
     navSettings: 'Pengaturan',
     navTransactions: 'Transaksi',
     navCollectionStation: 'Pos Pengumpulan',
+    navPosts: 'Posko Pengumpulan',
     navCitizenVerification: 'Verifikasi Warga',
     navCitizens: 'Daftar Warga',
     navUsers: 'Manajemen Pengguna',
