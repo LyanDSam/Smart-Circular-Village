@@ -211,6 +211,42 @@ export const rewardService = {
   },
 
   /**
+   * Real-time listener for all redemptions belonging to a citizen.
+   * Used in MyRedemptionsPage so the card list auto-updates on status change.
+   */
+  listenToCitizenRedemptions(userId, callback) {
+    if (!userId) return () => {};
+    const ref = collection(db, 'reward_redemptions');
+    const q = query(ref, where('userId', '==', userId));
+    return onSnapshot(
+      q,
+      (snap) => {
+        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+        callback(list);
+      },
+      (err) => console.error('Citizen redemptions listener error:', err)
+    );
+  },
+
+  /**
+   * Real-time listener for all redemptions (Officer / Admin view).
+   * Auto-updates the officer list when citizen confirms receipt.
+   */
+  listenToAllRedemptions(callback) {
+    const ref = collection(db, 'reward_redemptions');
+    return onSnapshot(
+      ref,
+      (snap) => {
+        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+        callback(list);
+      },
+      (err) => console.error('All redemptions listener error:', err)
+    );
+  },
+
+  /**
    * Officer scans QR & requests physical confirmation from Citizen.
    * Changes status -> 'awaiting_confirmation'.
    */

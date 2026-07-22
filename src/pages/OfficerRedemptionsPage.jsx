@@ -81,23 +81,32 @@ export const OfficerRedemptionsPage = () => {
     setTimeout(() => setFeedback(null), 5000);
   };
 
-  const fetchRedemptionsData = async () => {
-    setLoading(true);
+  // Manual refresh for stats cards only
+  const refreshStats = async () => {
     try {
-      const list = await rewardService.getAllRedemptions({ statusFilter: 'all' });
-      setRedemptions(list);
       const metrics = await rewardService.getRedemptionStats();
       setStats(metrics);
     } catch (err) {
-      console.error('Error loading redemptions:', err);
-    } finally {
-      setLoading(false);
+      console.error('Error refreshing stats:', err);
     }
   };
 
+  // Real-time listener — list auto-updates when citizen confirms or status changes
   useEffect(() => {
-    fetchRedemptionsData();
+    setLoading(true);
+    const unsubscribe = rewardService.listenToAllRedemptions((list) => {
+      setRedemptions(list);
+      setLoading(false);
+      // Also refresh stats on any change
+      rewardService.getRedemptionStats().then(setStats).catch(console.error);
+    });
+    return () => unsubscribe();
   }, []);
+
+  // Kept for Refresh button compatibility
+  const fetchRedemptionsData = () => {
+    refreshStats();
+  };
 
   // Open Proof Photo Camera for a redemption
   const handleOpenPhotoCapture = (redemption) => {
