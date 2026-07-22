@@ -1,8 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { QRCodeDisplay } from '@/components/common/QRCodeDisplay';
 import { PageHeader } from '@/components/common/PageHeader';
-import { SectionCard } from '@/components/common/SectionCard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatusBadge, RoleBadge } from '@/features/users/components/StatusBadge';
 import { PointCard } from '@/components/dashboard/PointCard';
@@ -10,6 +9,8 @@ import { RecentTransactions } from '@/components/dashboard/RecentTransactions';
 import { RewardPreview } from '@/components/dashboard/RewardPreview';
 import { NotificationPanel } from '@/components/dashboard/NotificationPanel';
 import { QuickActionCard } from '@/components/dashboard/QuickActionCard';
+import { transactionService } from '@/services/transactionService';
+import { rewardService } from '@/services/rewardService';
 import {
   Leaf,
   CreditCard,
@@ -17,18 +18,36 @@ import {
   Gift,
   QrCode,
   Bell,
-  Award,
 } from 'lucide-react';
-import {
-  MOCK_CITIZEN_TRANSACTIONS,
-  MOCK_REWARDS_PREVIEW,
-  MOCK_NOTIFICATIONS,
-} from '@/constants/mockDashboardData';
 
 export const CitizenDashboard = () => {
   const { userProfile } = useAuth();
+  const [citizenTransactions, setCitizenTransactions] = useState([]);
+  const [rewardCatalog, setRewardCatalog] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const citizenPoints = userProfile?.points || 1245; // Placeholder default points if profile not initialized
+  // Directly sync live Firestore points (0 if new account)
+  const citizenPoints = userProfile?.points ?? 0;
+
+  useEffect(() => {
+    async function loadLiveCitizenData() {
+      setIsLoading(true);
+      try {
+        if (userProfile?.uid) {
+          const txs = await transactionService.getCitizenTransactions(userProfile.uid, 5);
+          setCitizenTransactions(txs);
+        }
+        const rewards = await rewardService.getRewards({ activeOnly: true });
+        setRewardCatalog(rewards.slice(0, 3));
+      } catch (err) {
+        console.warn('Error loading live citizen data:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    loadLiveCitizenData();
+  }, [userProfile?.uid]);
 
   const citizenActions = [
     { label: 'Kartu QR Saya', path: '/my-qr', icon: QrCode },
@@ -58,7 +77,7 @@ export const CitizenDashboard = () => {
           <PointCard
             points={citizenPoints}
             memberId={userProfile?.memberId || 'SCV-26-000101'}
-            rfidUid={userProfile?.rfidUid || '8A:3F:1C:90'}
+            rfidUid={userProfile?.rfidUid || null}
           />
 
           <QuickActionCard title="Menu Cepat Warga" actions={citizenActions} />
@@ -80,7 +99,7 @@ export const CitizenDashboard = () => {
             </div>
             <div className="text-center space-y-0.5">
               <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                {userProfile?.fullName || 'Budi Santoso'}
+                {userProfile?.fullName || 'Warga SCV'}
               </p>
               <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">
                 {userProfile?.memberId || 'SCV-26-000101'}
@@ -100,9 +119,9 @@ export const CitizenDashboard = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
           <RecentTransactions
-            transactions={MOCK_CITIZEN_TRANSACTIONS}
+            transactions={citizenTransactions}
             title="Setoran Terakhir & Riwayat"
-            description="Preview riwayat setoran sampah pribadi Anda"
+            description="Preview riwayat setoran sampah pribadi Anda dari database Firestore"
             showMember={false}
             isCompact={true}
           />
@@ -110,7 +129,7 @@ export const CitizenDashboard = () => {
 
         <div>
           <NotificationPanel
-            notifications={MOCK_NOTIFICATIONS}
+            notifications={[]}
             title="Pemberitahuan Poin & Sistem"
             description="Notifikasi transaksi pribadi"
           />
@@ -118,10 +137,12 @@ export const CitizenDashboard = () => {
       </div>
 
       {/* 4. Reward Preview */}
-      <RewardPreview
-        rewards={MOCK_REWARDS_PREVIEW}
-        userPoints={citizenPoints}
-      />
+      {rewardCatalog.length > 0 && (
+        <RewardPreview
+          rewards={rewardCatalog}
+          userPoints={citizenPoints}
+        />
+      )}
     </div>
   );
 };

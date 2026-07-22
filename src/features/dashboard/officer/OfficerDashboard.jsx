@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/common/PageHeader';
 import { MetricCard } from '@/components/dashboard/MetricCard';
 import { QuickActionCard } from '@/components/dashboard/QuickActionCard';
 import { RecentTransactions } from '@/components/dashboard/RecentTransactions';
 import { RoleBadge } from '@/features/users/components/StatusBadge';
+import { transactionService } from '@/services/transactionService';
+import { userService } from '@/services/userService';
 import {
   Scale,
   ArrowLeftRight,
@@ -15,16 +17,46 @@ import {
   BarChart3,
   Gift,
 } from 'lucide-react';
-import { MOCK_TRANSACTIONS, MOCK_WASTE_SUMMARY } from '@/constants/mockDashboardData';
 
 export const OfficerDashboard = () => {
   const { userProfile } = useAuth();
+  const [stats, setStats] = useState({
+    totalTransactions: 0,
+    totalWasteKg: 0,
+    organicWasteKg: 0,
+    inorganicWasteKg: 0,
+  });
+  const [userStats, setUserStats] = useState({ pendingCount: 0 });
+  const [recentTxs, setRecentTxs] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadLiveOfficerData() {
+      setIsLoading(true);
+      try {
+        const txStats = await transactionService.getTransactionStats();
+        setStats(txStats);
+
+        const uStats = await userService.getUserStats();
+        setUserStats(uStats);
+
+        const { transactions } = await transactionService.getTransactions({ pageSize: 5 });
+        setRecentTxs(transactions);
+      } catch (err) {
+        console.warn('Error loading officer dashboard data:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    loadLiveOfficerData();
+  }, []);
 
   const officerActions = [
     { label: 'Input Transaksi Sampah', path: '/transactions', icon: PlusCircle },
     { label: 'Verifikasi Warga Baru', path: '/admin/users/pending', icon: UserCheck },
     { label: 'Proses Penukaran Reward', path: '/rewards', icon: Gift },
-    { label: 'Lihat Laporan Operational', path: '/reports', icon: BarChart3 },
+    { label: 'Lihat Laporan Operasional', path: '/reports', icon: BarChart3 },
   ];
 
   return (
@@ -41,9 +73,9 @@ export const OfficerDashboard = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Today's Transactions */}
         <MetricCard
-          title="Transaksi Hari Ini"
-          value={`${MOCK_WASTE_SUMMARY.todayTransactionsCount} Transaksi`}
-          subtext="Setoran sampah tercatat hari ini"
+          title="Total Transaksi Audit"
+          value={`${stats.totalTransactions} Transaksi`}
+          subtext="Setoran sampah tercatat di Firestore"
           icon={ArrowLeftRight}
           color="emerald"
         />
@@ -51,19 +83,19 @@ export const OfficerDashboard = () => {
         {/* Pending Citizen Verification */}
         <MetricCard
           title="Verifikasi Warga Pending"
-          value={`${MOCK_WASTE_SUMMARY.pendingVerifications} Warga`}
-          subtext="Menunggu penautan rfid & kelengkapan"
+          value={`${userStats.pendingCount} Warga`}
+          subtext="Menunggu penautan RFID & persetujuan"
           icon={UserCheck}
           color="amber"
-          trend={MOCK_WASTE_SUMMARY.pendingVerifications > 0 ? 'Perlu Tindakan' : 'Selesai'}
-          trendType={MOCK_WASTE_SUMMARY.pendingVerifications > 0 ? 'negative' : 'positive'}
+          trend={userStats.pendingCount > 0 ? 'Perlu Tindakan' : 'Selesai'}
+          trendType={userStats.pendingCount > 0 ? 'negative' : 'positive'}
         />
 
         {/* Organic Waste Collected */}
         <MetricCard
           title="Sampah Organik Terkumpul"
-          value={`${MOCK_WASTE_SUMMARY.todayOrganicKg} kg`}
-          subtext="Terkumpul hari ini di pos"
+          value={`${stats.organicWasteKg} kg`}
+          subtext="Terkumpul di pos pengumpulan"
           icon={Leaf}
           color="emerald"
         />
@@ -71,7 +103,7 @@ export const OfficerDashboard = () => {
         {/* Inorganic Waste Collected */}
         <MetricCard
           title="Sampah Anorganik Terkumpul"
-          value={`${MOCK_WASTE_SUMMARY.todayInorganicKg} kg`}
+          value={`${stats.inorganicWasteKg} kg`}
           subtext="Plastik, kertas, dan logam"
           icon={Recycle}
           color="blue"
@@ -82,7 +114,7 @@ export const OfficerDashboard = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
           <RecentTransactions
-            transactions={MOCK_TRANSACTIONS}
+            transactions={recentTxs}
             title="Transaksi Terbaru"
             description="Daftar setoran sampah warga terkini di Pos Pengumpulan"
             showMember={true}

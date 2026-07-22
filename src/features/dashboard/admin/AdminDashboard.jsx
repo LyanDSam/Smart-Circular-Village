@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { userService } from '@/services/userService';
+import { deviceService } from '@/services/deviceService';
+import { transactionService } from '@/services/transactionService';
 import { PageHeader } from '@/components/common/PageHeader';
 import { SectionCard } from '@/components/common/SectionCard';
 import { MetricCard } from '@/components/dashboard/MetricCard';
@@ -17,9 +19,7 @@ import {
   UserCheck,
   UserPlus,
   Settings,
-  ArrowRight,
 } from 'lucide-react';
-import { MOCK_COMPOST_SUMMARY } from '@/constants/mockDashboardData';
 
 export const AdminDashboard = () => {
   const { userProfile } = useAuth();
@@ -30,17 +30,34 @@ export const AdminDashboard = () => {
     activeOfficers: 0,
     rejectedCount: 0,
   });
+  const [deviceStats, setDeviceStats] = useState({
+    totalCount: 0,
+    onlineCount: 0,
+    offlineCount: 0,
+    compostBinsCount: 0,
+    stationsCount: 0,
+  });
+  const [txStats, setTxStats] = useState({
+    totalTransactions: 0,
+    totalWasteKg: 0,
+  });
 
   useEffect(() => {
-    const fetchStats = async () => {
+    const fetchAdminStats = async () => {
       try {
-        const stats = await userService.getUserStats();
-        setUserStats(stats);
+        const uStats = await userService.getUserStats();
+        setUserStats(uStats);
+
+        const dStats = await deviceService.getDeviceStats();
+        setDeviceStats(dStats);
+
+        const tStats = await transactionService.getTransactionStats();
+        setTxStats(tStats);
       } catch (err) {
-        console.error('Error fetching admin user stats:', err);
+        console.error('Error fetching admin dashboard stats:', err);
       }
     };
-    fetchStats();
+    fetchAdminStats();
   }, []);
 
   const adminActions = [
@@ -86,27 +103,27 @@ export const AdminDashboard = () => {
 
         {/* Device Summary */}
         <MetricCard
-          title="Ringkasan Perangkat"
-          value="4 Terhubung"
-          subtext="3 Stand Station • 1 Compost Bin"
+          title="Perangkat IoT"
+          value={`${deviceStats.totalCount} Perangkat`}
+          subtext={`${deviceStats.onlineCount} Online • ${deviceStats.offlineCount} Offline`}
           icon={Cpu}
           color="blue"
         />
 
         {/* Compost Monitoring Summary */}
         <MetricCard
-          title="Ringkasan Kompos"
-          value={`${MOCK_COMPOST_SUMMARY.activeBins}/${MOCK_COMPOST_SUMMARY.totalBins} Bins`}
-          subtext={`Suhu rata-rata: ${MOCK_COMPOST_SUMMARY.avgTemperature}°C`}
+          title="Sampah Terkumpul"
+          value={`${txStats.totalWasteKg} Kg`}
+          subtext="Total sampah terolah"
           icon={Sprout}
           color="purple"
         />
 
         {/* Reports Summary */}
         <MetricCard
-          title="Ringkasan Laporan"
-          value="12 Laporan"
-          subtext="Performa desa bulan ini"
+          title="Total Audit"
+          value={`${txStats.totalTransactions} Record`}
+          subtext="Transaksi di Firestore"
           icon={FileSpreadsheet}
           color="slate"
         />
@@ -124,24 +141,20 @@ export const AdminDashboard = () => {
         <div className="space-y-6">
           <QuickActionCard title="Tindakan Cepat Admin" actions={adminActions} />
 
-          <SectionCard title="Ringkasan Status Kompos Pintar" description="Sensor IoT live">
-            <div className="space-y-3 pt-1">
-              <div className="flex justify-between items-center text-xs p-2.5 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800">
-                <span className="font-semibold text-slate-600 dark:text-slate-300">Suhu Rata-rata</span>
-                <span className="font-bold text-emerald-600 dark:text-emerald-400">{MOCK_COMPOST_SUMMARY.avgTemperature} °C</span>
+          <SectionCard title="Ringkasan Perangkat IoT" description="Status konektivitas realtime">
+            <div className="space-y-3 pt-1 text-xs">
+              <div className="flex justify-between items-center p-2.5 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800">
+                <span className="font-semibold text-slate-600 dark:text-slate-300">Station Penimbangan</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400">{deviceStats.stationsCount} Perangkat</span>
               </div>
-              <div className="flex justify-between items-center text-xs p-2.5 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800">
-                <span className="font-semibold text-slate-600 dark:text-slate-300">Kelembaban Soil</span>
-                <span className="font-bold text-blue-600 dark:text-blue-400">{MOCK_COMPOST_SUMMARY.avgHumidity} %</span>
+              <div className="flex justify-between items-center p-2.5 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800">
+                <span className="font-semibold text-slate-600 dark:text-slate-300">Bak Kompos Pintar</span>
+                <span className="font-bold text-blue-600 dark:text-blue-400">{deviceStats.compostBinsCount} Perangkat</span>
               </div>
-              <div className="flex justify-between items-center text-xs p-2.5 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800">
-                <span className="font-semibold text-slate-600 dark:text-slate-300">Kadar Gas Metana</span>
-                <span className="font-bold text-amber-600 dark:text-amber-400">{MOCK_COMPOST_SUMMARY.avgMethane} PPM</span>
-              </div>
-              <div className="flex justify-between items-center text-xs p-2.5 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800">
-                <span className="font-semibold text-slate-600 dark:text-slate-300">Air Lindi (Leachate)</span>
+              <div className="flex justify-between items-center p-2.5 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800">
+                <span className="font-semibold text-slate-600 dark:text-slate-300">Status Perangkat Online</span>
                 <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200">
-                  {MOCK_COMPOST_SUMMARY.leachateStatus}
+                  {deviceStats.onlineCount} Online
                 </Badge>
               </div>
             </div>

@@ -8,7 +8,8 @@
     "build": "vite build",
     "lint": "vite build",
     "preview": "vite preview",
-    "bootstrap:admin": "node scripts/bootstrapAdmin.js"
+    "bootstrap:admin": "node scripts/bootstrapAdmin.js",
+    "db:inspect": "node scripts/inspectDatabase.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",

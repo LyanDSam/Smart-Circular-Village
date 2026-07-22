@@ -1,1 +1,9 @@
-export const TRANSACTIONS_FEATURE = { name: 'transactions' };
+export { PendingTransactionCard } from './components/PendingTransactionCard';
+export { ConfirmTransactionModal } from './components/ConfirmTransactionModal';
+export { UnknownRfidModal } from './components/UnknownRfidModal';
+export { CitizenSelectorModal } from './components/CitizenSelectorModal';
+export { TransactionTable } from './components/TransactionTable';
+export { TransactionFilters } from './components/TransactionFilters';
+export { TransactionDetailModal } from './components/TransactionDetailModal';
+export { usePendingTransactions } from './hooks/usePendingTransactions';
+export { useTransactions } from './hooks/useTransactions';

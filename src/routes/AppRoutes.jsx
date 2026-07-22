@@ -73,6 +73,7 @@ export const AppRoutes = () => {
             <Route element={<RoleRoute allowedRoles={['citizen']} />}>
               <Route path="/my-points" element={<MyPointsPage />} />
               <Route path="/deposit-history" element={<DepositHistoryPage />} />
+              <Route path="/my-transactions" element={<DepositHistoryPage />} />
               <Route path="/my-qr" element={<MyQRPage />} />
               <Route path="/profile" element={<ProfilePage />} />
             </Route>
@@ -90,6 +91,8 @@ export const AppRoutes = () => {
             {/* Officer & Admin Shared Routes */}
             <Route element={<RoleRoute allowedRoles={['officer', 'admin']} />}>
               <Route path="/transactions" element={<TransactionsPage />} />
+              <Route path="/officer/transactions" element={<TransactionsPage />} />
+              <Route path="/officer/transactions/history" element={<TransactionsPage />} />
               <Route path="/collection-station" element={<div className="p-8 text-center text-sm text-slate-400">Pos Pengumpulan — Segera Hadir</div>} />
               <Route path="/compost" element={<SmartCompostPage />} />
               <Route path="/admin/users/pending" element={<PendingUsersPage />} />

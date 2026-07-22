@@ -1,0 +1,24 @@
+{
+  "name": "scv-cloud-functions",
+  "version": "1.0.0",
+  "description": "Smart Circular Village (SCV) - ESP32 IoT REST API Middleware",
+  "main": "src/index.js",
+  "scripts": {
+    "serve": "firebase serve --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "18"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "firebase-admin": "^12.1.0",
+    "firebase-functions": "^5.0.0",
+    "zod": "^3.23.8"
+  },
+  "private": true
+}

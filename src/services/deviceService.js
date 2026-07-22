@@ -49,87 +49,10 @@ export const computeDeviceStatus = (device, lastSeenMs = null) => {
   return 'offline';
 };
 
-/**
- * Standardized Seed Devices for Initial System Setup
- */
-const DEFAULT_MOCK_DEVICES = [
-  {
-    deviceId: 'SCV-COMP-001',
-    deviceType: 'compost',
-    name: 'Smart Compost Bin #01',
-    firmwareVersion: '1.0.0',
-    apiKey: 'SCV_9f2ab45d81c049e7b1a23c4d5e6f7a8b',
-    location: {
-      village: 'Desa Circular Utama',
-      address: 'Komposting Area RT 03 / RW 01',
-      latitude: -6.2088,
-      longitude: 106.8456,
-    },
-    isActive: true,
-    isDeleted: false,
-    lastSeen: new Date(Date.now() - 20 * 1000).toISOString(), // 20 seconds ago -> Online
-    createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-    updatedAt: new Date(Date.now() - 20 * 1000).toISOString(),
-  },
-  {
-    deviceId: 'SCV-COLL-001',
-    deviceType: 'collection_station',
-    name: 'Smart Collection Station POS 01',
-    firmwareVersion: '1.1.2',
-    apiKey: 'SCV_4b7190c12e8f43a9a1d2e3f4567890ab',
-    location: {
-      village: 'Desa Circular Utama',
-      address: 'Pos Pengumpulan RT 01 / RW 01',
-      latitude: -6.2095,
-      longitude: 106.8462,
-    },
-    isActive: true,
-    isDeleted: false,
-    lastSeen: new Date(Date.now() - 10 * 1000).toISOString(), // 10 seconds ago -> Online
-    createdAt: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000).toISOString(),
-    updatedAt: new Date(Date.now() - 10 * 1000).toISOString(),
-  },
-  {
-    deviceId: 'SCV-COMP-002',
-    deviceType: 'compost',
-    name: 'Smart Compost Bin #02',
-    firmwareVersion: '1.0.0',
-    apiKey: 'SCV_7f8e9d0c1b2a3456789abcdef0123456',
-    location: {
-      village: 'Desa Circular Barat',
-      address: 'Kebun Komunitas RT 05 / RW 02',
-      latitude: -6.2110,
-      longitude: 106.8420,
-    },
-    isActive: true,
-    isDeleted: false,
-    lastSeen: new Date(Date.now() - 4 * 3600 * 1000).toISOString(), // 4 hours ago -> Offline
-    createdAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
-    updatedAt: new Date(Date.now() - 4 * 3600 * 1000).toISOString(),
-  },
-  {
-    deviceId: 'SCV-COLL-002',
-    deviceType: 'collection_station',
-    name: 'Smart Collection Station POS 02',
-    firmwareVersion: '1.0.0',
-    apiKey: 'SCV_1a2b3c4d5e6f7890123456789abcdef0',
-    location: {
-      village: 'Desa Circular Timur',
-      address: 'Pos Pengumpulan RW 03',
-      latitude: -6.2050,
-      longitude: 106.8500,
-    },
-    isActive: false, // Disabled
-    isDeleted: false,
-    lastSeen: new Date(Date.now() - 48 * 3600 * 1000).toISOString(),
-    createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-    updatedAt: new Date(Date.now() - 48 * 3600 * 1000).toISOString(),
-  },
-];
-
 export const deviceService = {
   /**
-   * Fetch devices metadata from Cloud Firestore & enrich with computed status from RTDB heartbeat.
+   * Fetch devices metadata directly from Cloud Firestore & enrich with computed status from RTDB heartbeat.
+   * STRICTLY NO DUMMY FALLBACK DATA.
    */
   async getDevices({ search = '', type = 'all', village = 'all', page = 1, pageSize = 10 } = {}) {
     let devicesList = [];
@@ -147,12 +70,10 @@ export const deviceService = {
             ...data,
           };
         });
-      } else {
-        devicesList = [...DEFAULT_MOCK_DEVICES];
       }
     } catch (err) {
-      console.warn('Connecting to Firestore devices metadata notice:', err);
-      devicesList = [...DEFAULT_MOCK_DEVICES];
+      console.error('Error reading devices metadata from Firestore:', err);
+      devicesList = [];
     }
 
     // Filter out soft-deleted
@@ -208,7 +129,7 @@ export const deviceService = {
   },
 
   /**
-   * Fetch single device by Device ID.
+   * Fetch single device by Device ID directly from Firestore.
    */
   async getDeviceById(deviceId) {
     if (!deviceId) return null;
@@ -222,11 +143,10 @@ export const deviceService = {
         return { ...dev, status: computeDeviceStatus(dev) };
       }
     } catch (err) {
-      console.warn('Error fetching device from Firestore:', err);
+      console.error('Error fetching device from Firestore:', err);
     }
 
-    const mock = DEFAULT_MOCK_DEVICES.find((d) => d.deviceId === deviceId);
-    return mock ? { ...mock, status: computeDeviceStatus(mock) } : null;
+    return null;
   },
 
   /**
@@ -263,12 +183,8 @@ export const deviceService = {
     };
 
     // 1. Save metadata to Cloud Firestore `devices/{deviceId}`
-    try {
-      const dRef = doc(db, 'devices', cleanId);
-      await setDoc(dRef, newDevice);
-    } catch (err) {
-      console.warn('Firestore device metadata notice:', err);
-    }
+    const dRef = doc(db, 'devices', cleanId);
+    await setDoc(dRef, newDevice);
 
     // 2. Prepare RTDB Tree Structure: `devices/{deviceId}`
     try {
@@ -327,12 +243,7 @@ export const deviceService = {
       updatedAt: serverTimestamp(),
     };
 
-    try {
-      await updateDoc(dRef, payload);
-    } catch (err) {
-      console.warn('Error updating device metadata in Firestore:', err);
-    }
-
+    await updateDoc(dRef, payload);
     return true;
   },
 
@@ -343,14 +254,10 @@ export const deviceService = {
     const dRef = doc(db, 'devices', deviceId);
     const nextActive = !currentIsActive;
 
-    try {
-      await updateDoc(dRef, {
-        isActive: nextActive,
-        updatedAt: serverTimestamp(),
-      });
-    } catch (err) {
-      console.warn('Error toggling device active state in Firestore:', err);
-    }
+    await updateDoc(dRef, {
+      isActive: nextActive,
+      updatedAt: serverTimestamp(),
+    });
 
     return { isActive: nextActive };
   },
@@ -362,14 +269,10 @@ export const deviceService = {
     const newApiKey = generateApiKey();
     const dRef = doc(db, 'devices', deviceId);
 
-    try {
-      await updateDoc(dRef, {
-        apiKey: newApiKey,
-        updatedAt: serverTimestamp(),
-      });
-    } catch (err) {
-      console.warn('Error regenerating API Key in Firestore:', err);
-    }
+    await updateDoc(dRef, {
+      apiKey: newApiKey,
+      updatedAt: serverTimestamp(),
+    });
 
     return newApiKey;
   },
@@ -380,15 +283,11 @@ export const deviceService = {
   async deleteDevice(deviceId) {
     const dRef = doc(db, 'devices', deviceId);
 
-    try {
-      await updateDoc(dRef, {
-        isDeleted: true,
-        isActive: false,
-        updatedAt: serverTimestamp(),
-      });
-    } catch (err) {
-      console.warn('Error soft deleting device in Firestore:', err);
-    }
+    await updateDoc(dRef, {
+      isDeleted: true,
+      isActive: false,
+      updatedAt: serverTimestamp(),
+    });
 
     return true;
   },

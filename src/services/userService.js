@@ -3,7 +3,10 @@ import {
   doc,
   getDoc,
   getDocs,
+  setDoc,
   updateDoc,
+  query,
+  where,
   serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '@/firebase/firestore';
@@ -41,7 +44,8 @@ export const userService = {
           (u.fullName && u.fullName.toLowerCase().includes(queryLower)) ||
           (u.email && u.email.toLowerCase().includes(queryLower)) ||
           (u.memberId && u.memberId.toLowerCase().includes(queryLower)) ||
-          (u.rfidUid && u.rfidUid.toLowerCase().includes(queryLower))
+          (u.rfidUid && u.rfidUid.toLowerCase().includes(queryLower)) ||
+          (u.phone && u.phone.toLowerCase().includes(queryLower))
       );
     }
 
@@ -103,11 +107,46 @@ export const userService = {
   },
 
   /**
+   * Directly lookup citizen in Firestore by RFID UID.
+   * Uses efficient Firestore query: where("rfidUid", "==", cleanRfid)
+   */
+  async getUserByRfidUid(rfidUid) {
+    if (!rfidUid) return null;
+    const cleanRfid = String(rfidUid).trim().toUpperCase();
+
+    try {
+      const usersRef = collection(db, 'users');
+      const q = query(
+        usersRef,
+        where('rfidUid', '==', cleanRfid),
+        where('isDeleted', '==', false)
+      );
+      const qSnap = await getDocs(q);
+
+      if (!qSnap.empty) {
+        const docSnap = qSnap.docs[0];
+        return { uid: docSnap.id, ...docSnap.data() };
+      }
+    } catch (err) {
+      console.error('Error querying user by RFID UID:', err);
+    }
+
+    return null;
+  },
+
+  /**
+   * Alias for getUserByRfidUid as per module specification.
+   */
+  async findUserByRFID(rfidUid) {
+    return this.getUserByRfidUid(rfidUid);
+  },
+
+  /**
    * Validate RFID Uniqueness across all users in Firestore.
    */
   async isRfidUnique(rfidUid, currentUid = null) {
     if (!rfidUid) return true;
-    const cleanRfid = rfidUid.trim().toUpperCase();
+    const cleanRfid = String(rfidUid).trim().toUpperCase();
 
     const { users } = await this.getUsers({ pageSize: 10000 });
     const existing = users.find(
@@ -117,24 +156,43 @@ export const userService = {
   },
 
   /**
-   * Assign or update RFID card UID in Firestore.
+   * Assign or update RFID card UID in Firestore and log audit record to `audit_logs`.
    */
-  async assignRfid(uid, rfidUid) {
-    if (!rfidUid || !rfidUid.trim()) {
-      throw new Error('RFID card UID cannot be empty.');
+  async assignRfid(uid, rfidUid, officerId = 'system_officer') {
+    if (!rfidUid || !String(rfidUid).trim()) {
+      throw new Error('RFID card UID tidak boleh kosong.');
     }
-    const cleanRfid = rfidUid.trim().toUpperCase();
+    const cleanRfid = String(rfidUid).trim().toUpperCase();
 
     const isUnique = await this.isRfidUnique(cleanRfid, uid);
     if (!isUnique) {
-      throw new Error(`RFID card UID "${cleanRfid}" is already assigned to another user.`);
+      throw new Error(`Kartu RFID "${cleanRfid}" sudah terikat pada akun warga lain.`);
     }
+
+    const currentUser = await this.getUserById(uid);
+    const oldRfid = currentUser?.rfidUid || null;
 
     const uRef = doc(db, 'users', uid);
     await updateDoc(uRef, {
       rfidUid: cleanRfid,
       updatedAt: serverTimestamp(),
     });
+
+    // Write audit record to `audit_logs`
+    try {
+      const auditRef = doc(collection(db, 'audit_logs'));
+      await setDoc(auditRef, {
+        auditId: auditRef.id,
+        action: 'assign_rfid',
+        officerId: officerId || 'system_officer',
+        userId: uid,
+        oldRFID: oldRfid,
+        newRFID: cleanRfid,
+        timestamp: serverTimestamp(),
+      });
+    } catch (auditErr) {
+      console.warn('Audit log write notice:', auditErr);
+    }
 
     return true;
   },
@@ -145,17 +203,17 @@ export const userService = {
    */
   async approveUser(uid, assignedRfid = null, assignedRole = 'citizen') {
     const user = await this.getUserById(uid);
-    if (!user) throw new Error('User not found.');
+    if (!user) throw new Error('User tidak ditemukan.');
 
-    const finalRfid = assignedRfid ? assignedRfid.trim().toUpperCase() : user.rfidUid;
+    const finalRfid = assignedRfid ? String(assignedRfid).trim().toUpperCase() : user.rfidUid;
 
     if (!finalRfid) {
-      throw new Error('RFID card must be assigned before account activation.');
+      throw new Error('Kartu RFID harus ditautkan sebelum akun warga diaktifkan.');
     }
 
     const isUnique = await this.isRfidUnique(finalRfid, uid);
     if (!isUnique) {
-      throw new Error(`RFID card UID "${finalRfid}" is already assigned to another user.`);
+      throw new Error(`Kartu RFID "${finalRfid}" sudah terdaftar pada pengguna lain.`);
     }
 
     const uRef = doc(db, 'users', uid);

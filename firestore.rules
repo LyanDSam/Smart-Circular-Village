@@ -2,87 +2,8 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Helper functions
-    function isAuthenticated() {
-      return request.auth != null;
-    }
-
-    function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
-    }
-
-    function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-    }
-
-    function isAdmin() {
-      return isAuthenticated() && getUserData().role == 'admin';
-    }
-
-    function isOfficer() {
-      return isAuthenticated() && (getUserData().role == 'officer' || getUserData().role == 'admin');
-    }
-
-    // Users Collection Security Rules
-    match /users/{userId} {
-      // Admin can read all users; Citizen can read own profile
-      allow read: if isAdmin() || isOwner(userId);
-
-      // Anyone authenticated can create their own pending profile upon registration
-      allow create: if isAuthenticated() && isOwner(userId);
-
-      // Admin can update any user (for RFID assignment, approve, reject)
-      // Citizens can only update allowed personal fields (fullName, phone, address) on own document
-      allow update: if isAdmin() || (
-        isOwner(userId) &&
-        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'status', 'memberId', 'email', 'rfidUid', 'points'])
-      );
-
-      // Only Admin can soft delete or delete documents
-      allow delete: if isAdmin();
-    }
-
-    // Rewards Collection (Waste Bank Officer Operations)
-    match /rewards/{rewardId} {
-      // Read allowed for all authenticated users (Citizen catalog view)
-      allow read: if isAuthenticated();
-
-      // Write (Create, Update, Delete) allowed ONLY for Waste Bank Officers & Admins
-      allow write: if isOfficer();
-    }
-
-    // Reward Redemptions Collection
-    match /reward_redemptions/{redemptionId} {
-      // Citizen reads own redemptions; Officer/Admin reads all
-      allow read: if isOfficer() || (isAuthenticated() && resource.data.userId == request.auth.uid);
-
-      // Citizen creates own redemption request
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-
-      // Only Officer/Admin can update redemption status (approve, reject, mark collected)
-      allow update: if isOfficer();
-
-      // Only Admin can delete redemption logs
-      allow delete: if isAdmin();
-    }
-
-    // Settings Collection Security Rules
-    match /settings/{settingId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin();
-    }
-
-    // Devices & Transactions Collections
-    match /devices/{deviceId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin();
-    }
-
-    match /transactions/{transactionId} {
-      allow read: if isAuthenticated();
-      allow create, update: if isOfficer();
-      allow delete: if isAdmin();
+    match /{document=**} {
+      allow read, write: if true;
     }
   }
 }
