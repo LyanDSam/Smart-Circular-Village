@@ -1,7 +1,6 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { QRCodeDisplay } from '@/components/common/QRCodeDisplay';
 import { Button } from '@/components/ui/button';
 import { Clock, ShieldAlert, LogOut, RefreshCw, Leaf, CheckCircle2 } from 'lucide-react';
 
@@ -39,22 +38,17 @@ export const VerificationPendingPage = () => {
         {/* Status Badge */}
         <div className="inline-flex items-center space-x-2 px-4 py-1.5 bg-amber-50 border border-amber-200 rounded-full text-amber-700 text-xs font-semibold">
           <Clock className="w-4 h-4 animate-spin text-amber-600" />
-          <span>Account Verification Pending</span>
+          <span>Verifikasi Akun Menunggu Persetujuan</span>
         </div>
 
         <div className="space-y-1">
-          <h2 className="text-xl font-bold text-slate-900">Registration Received!</h2>
+          <h2 className="text-xl font-bold text-slate-900">Pendaftaran Berhasil Diterima!</h2>
           <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
-            Welcome, <span className="font-semibold text-slate-800">{userProfile?.fullName || 'Citizen'}</span>. Your registration is awaiting administrator verification and RFID card assignment.
+            Selamat datang, <span className="font-semibold text-slate-800">{userProfile?.fullName || 'Warga'}</span>. Pendaftaran Anda sedang menunggu verifikasi administrator dan penautan kartu RFID physical.
           </p>
         </div>
 
-        {/* SVG QR Code Display */}
-        <div className="py-2">
-          <QRCodeDisplay value={userProfile?.qrCode || userProfile?.memberId || 'SCV-26-PENDING'} size={160} />
-        </div>
-
-        {/* Member Info */}
+        {/* Member Info Card */}
         <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-2 text-left">
           <div className="flex justify-between items-center pb-2 border-b border-slate-200">
             <span className="text-slate-500">SCV Member ID:</span>
@@ -67,20 +61,20 @@ export const VerificationPendingPage = () => {
             <span className="font-semibold text-slate-800">{userProfile?.email}</span>
           </div>
           <div className="flex justify-between items-center">
-            <span className="text-slate-500">Phone:</span>
+            <span className="text-slate-500">No. Telp / HP:</span>
             <span className="font-semibold text-slate-800">{userProfile?.phone || '-'}</span>
           </div>
           <div className="flex justify-between items-center">
-            <span className="text-slate-500">RFID Card:</span>
-            <span className="font-mono text-amber-600 font-semibold italic">Awaiting Assignment</span>
+            <span className="text-slate-500">Status Kartu RFID:</span>
+            <span className="font-mono text-amber-600 font-semibold italic">Menunggu Penautan Admin</span>
           </div>
         </div>
 
         {/* Instructions */}
-        <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-left flex items-start space-x-2 text-[11px] text-blue-800">
+        <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-xl text-left flex items-start space-x-2 text-[11px] text-blue-800">
           <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
           <span>
-            Please present your Member ID / QR Code to a village officer to collect your physical RFID card. Once approved, this page will update automatically.
+            Silakan sebutkan SCV Member ID Anda kepada petugas atau admin pos pengumpulan desa untuk mengambil dan menautkan kartu RFID fisik. Halaman ini akan diperbarui secara otomatis.
           </span>
         </div>
 
@@ -92,7 +86,7 @@ export const VerificationPendingPage = () => {
             className="w-full text-xs gap-2 h-10 border-slate-200 hover:bg-slate-50"
           >
             <RefreshCw className="w-3.5 h-3.5" />
-            <span>Check Verification Status</span>
+            <span>Cek Status Verifikasi</span>
           </Button>
 
           <Button
@@ -101,7 +95,7 @@ export const VerificationPendingPage = () => {
             className="w-full text-xs text-slate-500 hover:text-slate-800 gap-2"
           >
             <LogOut className="w-3.5 h-3.5" />
-            <span>Sign Out</span>
+            <span>Keluar Akun (Sign Out)</span>
           </Button>
         </div>
       </div>

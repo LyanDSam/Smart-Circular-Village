@@ -11,6 +11,7 @@ import {
 } from '@/features/devices';
 import { LoadingState } from '@/components/common/LoadingState';
 import { EmptyState } from '@/components/common/EmptyState';
+import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Eye, ChevronLeft, ChevronRight, CheckCircle2, AlertCircle } from 'lucide-react';
@@ -27,6 +28,16 @@ export const DevicesPage = () => {
   const [selectedDevice, setSelectedDevice] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState(null); // { type: 'success'|'error', text: '' }
+
+  // Custom Confirm Dialog state
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: '',
+    description: '',
+    confirmText: 'Konfirmasi',
+    variant: 'danger',
+    onConfirm: () => {},
+  });
 
   const {
     devices,
@@ -99,26 +110,44 @@ export const DevicesPage = () => {
     }
   };
 
-  const handleRegenerateKey = async (device) => {
-    if (window.confirm(`Regenerasi API Key untuk "${device.name}" (${device.deviceId})? API Key lama tidak akan bisa digunakan lagi.`)) {
-      try {
-        const newKey = await regenerateApiKey(device.deviceId);
-        showToast(`API Key baru berhasil dibuat untuk ${device.deviceId}!`);
-      } catch (err) {
-        showToast('Gagal meregenerasi API Key.', 'error');
-      }
-    }
+  const promptRegenerateKey = (device) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: `Regenerasi API Key "${device.name}"?`,
+      description: `Apakah Anda yakin ingin meregenerasi API Key untuk ${device.deviceId}? API Key lama tidak akan bisa digunakan oleh firmware ESP32 lagi.`,
+      confirmText: 'Ya, Regenerasi API Key',
+      variant: 'warning',
+      onConfirm: async () => {
+        try {
+          await regenerateApiKey(device.deviceId);
+          showToast(`API Key baru berhasil dibuat untuk ${device.deviceId}!`);
+        } catch (err) {
+          showToast('Gagal meregenerasi API Key.', 'error');
+        } finally {
+          setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        }
+      },
+    });
   };
 
-  const handleDelete = async (device) => {
-    if (window.confirm(`Hapus perangkat "${device.name}" (${device.deviceId}) dari sistem?`)) {
-      try {
-        await deleteDevice(device.deviceId);
-        showToast(`Perangkat ${device.deviceId} berhasil dihapus.`);
-      } catch (err) {
-        showToast('Gagal menghapus perangkat.', 'error');
-      }
-    }
+  const promptDeleteDevice = (device) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: `Hapus Perangkat "${device.name}"?`,
+      description: `Apakah Anda yakin ingin menghapus perangkat ${device.deviceId} dari sistem?`,
+      confirmText: 'Ya, Hapus Perangkat',
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          await deleteDevice(device.deviceId);
+          showToast(`Perangkat ${device.deviceId} berhasil dihapus.`);
+        } catch (err) {
+          showToast('Gagal menghapus perangkat.', 'error');
+        } finally {
+          setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        }
+      },
+    });
   };
 
   return (
@@ -193,9 +222,9 @@ export const DevicesPage = () => {
               canManage={canManage}
               onViewDetail={handleOpenDetail}
               onEdit={handleOpenEdit}
-              onRegenerateKey={handleRegenerateKey}
+              onRegenerateKey={promptRegenerateKey}
               onToggleActive={handleToggleActive}
-              onDelete={handleDelete}
+              onDelete={promptDeleteDevice}
             />
           ))}
         </div>
@@ -205,9 +234,9 @@ export const DevicesPage = () => {
           canManage={canManage}
           onViewDetail={handleOpenDetail}
           onEdit={handleOpenEdit}
-          onRegenerateKey={handleRegenerateKey}
+          onRegenerateKey={promptRegenerateKey}
           onToggleActive={handleToggleActive}
-          onDelete={handleDelete}
+          onDelete={promptDeleteDevice}
         />
       )}
 
@@ -256,6 +285,16 @@ export const DevicesPage = () => {
         isOpen={detailModalOpen}
         onClose={() => setDetailModalOpen(false)}
         device={selectedDevice}
+      />
+
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmDialog.onConfirm}
+        title={confirmDialog.title}
+        description={confirmDialog.description}
+        confirmText={confirmDialog.confirmText}
+        variant={confirmDialog.variant}
       />
     </div>
   );

@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { userService } from '@/services/userService';
-import { QRCodeDisplay } from '@/components/common/QRCodeDisplay';
 import { ApproveDialog } from '@/features/users/components/ApproveDialog';
 import { RejectDialog } from '@/features/users/components/RejectDialog';
 import { PageHeader } from '@/components/common/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Clock, CheckCircle2, XCircle, Eye, ArrowLeft, Mail, Phone, MapPin } from 'lucide-react';
+import { Clock, CheckCircle2, XCircle, Eye, ArrowLeft, Mail, Phone, MapPin, CreditCard } from 'lucide-react';
 
 export const PendingUsersPage = () => {
   const [pendingUsers, setPendingUsers] = useState([]);
@@ -84,14 +83,20 @@ export const PendingUsersPage = () => {
                 </p>
               </CardHeader>
 
-              <CardContent className="py-4 space-y-4 text-xs">
-                {/* QR Code */}
-                <div className="flex justify-center">
-                  <QRCodeDisplay value={u.qrCode || u.memberId} size={120} />
+              <CardContent className="py-4 space-y-3 text-xs">
+                {/* RFID Status */}
+                <div className="p-2.5 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
+                  <span className="text-slate-500 flex items-center gap-1.5">
+                    <CreditCard className="w-4 h-4 text-amber-500" />
+                    RFID Card:
+                  </span>
+                  <span className="font-mono text-amber-600 dark:text-amber-400 font-bold">
+                    {u.rfidUid || 'Awaiting Link'}
+                  </span>
                 </div>
 
                 {/* Details */}
-                <div className="space-y-1.5 text-slate-600 dark:text-slate-300 border-t border-slate-100 dark:border-slate-800 pt-3">
+                <div className="space-y-1.5 text-slate-600 dark:text-slate-300 pt-1">
                   <div className="flex items-center space-x-2">
                     <Mail className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 shrink-0" />
                     <span className="truncate">{u.email}</span>

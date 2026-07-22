@@ -53,7 +53,6 @@ export const authService = {
         status: 'pending',
         points: 0,
         rfidUid: null,
-        qrCode: memberId,
         isDeleted: false,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),

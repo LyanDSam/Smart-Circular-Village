@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
-import { Award, CreditCard, QrCode } from 'lucide-react';
+import { Award, CreditCard } from 'lucide-react';
 
 export const PointCard = ({ points = 0, memberId = 'N/A', rfidUid = null }) => {
   return (

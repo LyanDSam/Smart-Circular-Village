@@ -60,7 +60,7 @@ export const SettingsPage = () => {
       await settingsService.updateSettings(systemRules);
       showToast('Parameter sistem berhasil disimpan di Firestore!');
     } catch (err) {
-      alert(err.message);
+      showToast(err.message || 'Gagal menyimpan parameter sistem.');
     } finally {
       setSavingSystem(false);
     }

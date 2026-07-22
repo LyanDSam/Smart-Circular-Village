@@ -5,6 +5,7 @@ import { StatusBadge, RoleBadge } from '@/features/users/components/StatusBadge'
 import { ApproveDialog } from '@/features/users/components/ApproveDialog';
 import { RejectDialog } from '@/features/users/components/RejectDialog';
 import { PageHeader } from '@/components/common/PageHeader';
+import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -73,11 +74,24 @@ export const UsersPage = () => {
     loadData();
   }, [search, roleFilter, statusFilter, page]);
 
-  const handleSoftDelete = async (uid, name) => {
-    if (window.confirm(`Are you sure you want to delete ${name}? (Soft Delete)`)) {
-      await userService.softDeleteUser(uid);
-      loadData();
-    }
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: '',
+    description: '',
+    onConfirm: () => {},
+  });
+
+  const promptSoftDelete = (uid, name) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: `Hapus Akun Pengguna "${name}"?`,
+      description: `Apakah Anda yakin ingin menghapus akun ${name}? (Soft Delete)`,
+      onConfirm: async () => {
+        await userService.softDeleteUser(uid);
+        setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        loadData();
+      },
+    });
   };
 
   return (
@@ -280,7 +294,7 @@ export const UsersPage = () => {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => handleSoftDelete(u.uid, u.fullName)}
+                            onClick={() => promptSoftDelete(u.uid, u.fullName)}
                             className="h-8 w-8 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40"
                             title="Soft Delete User"
                           >
@@ -342,6 +356,16 @@ export const UsersPage = () => {
         onClose={() => setRejectUserTarget(null)}
         user={rejectUserTarget}
         onRejected={loadData}
+      />
+
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmDialog.onConfirm}
+        title={confirmDialog.title}
+        description={confirmDialog.description}
+        confirmText="Hapus Pengguna"
+        variant="danger"
       />
     </div>
   );

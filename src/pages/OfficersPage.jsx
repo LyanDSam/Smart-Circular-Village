@@ -6,6 +6,7 @@ import { StatusBadge, RoleBadge } from '@/features/users/components/StatusBadge'
 import { ApproveDialog } from '@/features/users/components/ApproveDialog';
 import { RejectDialog } from '@/features/users/components/RejectDialog';
 import { PageHeader } from '@/components/common/PageHeader';
+import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -81,11 +82,24 @@ export const OfficersPage = () => {
     loadData();
   }, [search, statusFilter, page]);
 
-  const handleSoftDelete = async (uid, name) => {
-    if (window.confirm(`Apakah Anda yakin ingin menghapus petugas ${name}?`)) {
-      await userService.softDeleteUser(uid);
-      loadData();
-    }
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: '',
+    description: '',
+    onConfirm: () => {},
+  });
+
+  const promptSoftDelete = (uid, name) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: `Hapus Petugas "${name}"?`,
+      description: `Apakah Anda yakin ingin menghapus petugas ${name}? Data akun petugas akan di-soft delete dari sistem.`,
+      onConfirm: async () => {
+        await userService.softDeleteUser(uid);
+        setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        loadData();
+      },
+    });
   };
 
   return (
@@ -277,7 +291,7 @@ export const OfficersPage = () => {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => handleSoftDelete(u.uid, u.fullName)}
+                            onClick={() => promptSoftDelete(u.uid, u.fullName)}
                             className="h-8 w-8 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40"
                             title="Hapus Petugas"
                           >
@@ -339,6 +353,16 @@ export const OfficersPage = () => {
         onClose={() => setRejectUserTarget(null)}
         user={rejectUserTarget}
         onRejected={loadData}
+      />
+
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmDialog.onConfirm}
+        title={confirmDialog.title}
+        description={confirmDialog.description}
+        confirmText="Hapus Petugas"
+        variant="danger"
       />
     </div>
   );

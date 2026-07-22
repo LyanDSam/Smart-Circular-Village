@@ -22,10 +22,11 @@ import { SettingsPage } from '@/pages/SettingsPage';
 // Citizen-only Pages
 import { MyPointsPage } from '@/pages/citizen/MyPointsPage';
 import { DepositHistoryPage } from '@/pages/citizen/DepositHistoryPage';
-import { MyQRPage } from '@/pages/citizen/MyQRPage';
+import { MyRedemptionsPage } from '@/pages/citizen/MyRedemptionsPage';
 import { ProfilePage } from '@/pages/citizen/ProfilePage';
 
-// Management & Verification Pages
+// Officer & Management Pages
+import { OfficerRedemptionsPage } from '@/pages/OfficerRedemptionsPage';
 import { UsersPage } from '@/pages/UsersPage';
 import { OfficersPage } from '@/pages/OfficersPage';
 import { PendingUsersPage } from '@/pages/PendingUsersPage';
@@ -74,13 +75,21 @@ export const AppRoutes = () => {
               <Route path="/my-points" element={<MyPointsPage />} />
               <Route path="/deposit-history" element={<DepositHistoryPage />} />
               <Route path="/my-transactions" element={<DepositHistoryPage />} />
-              <Route path="/my-qr" element={<MyQRPage />} />
+              <Route path="/my-rewards" element={<RewardsPage />} />
+              <Route path="/my-redemptions" element={<MyRedemptionsPage />} />
               <Route path="/profile" element={<ProfilePage />} />
             </Route>
 
             {/* Rewards — Citizen, Officer, Admin */}
             <Route element={<RoleRoute allowedRoles={['citizen', 'officer', 'admin']} />}>
               <Route path="/rewards" element={<RewardsPage />} />
+            </Route>
+
+            {/* Officer & Admin Shared Redemption Verification Routes */}
+            <Route element={<RoleRoute allowedRoles={['officer', 'admin']} />}>
+              <Route path="/officer/reward-redemptions" element={<OfficerRedemptionsPage />} />
+              <Route path="/officer/reward-history" element={<OfficerRedemptionsPage />} />
+              <Route path="/admin/reward-redemptions" element={<OfficerRedemptionsPage />} />
             </Route>
 
             {/* Notifications — Citizen, Admin */}

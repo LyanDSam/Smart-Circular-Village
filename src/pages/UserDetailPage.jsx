@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { userService } from '@/services/userService';
-import { QRCodeDisplay } from '@/components/common/QRCodeDisplay';
 import { StatusBadge, RoleBadge } from '@/features/users/components/StatusBadge';
 import { ApproveDialog } from '@/features/users/components/ApproveDialog';
 import { RejectDialog } from '@/features/users/components/RejectDialog';
 import { PageHeader } from '@/components/common/PageHeader';
+import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
@@ -98,11 +98,16 @@ export const UserDetailPage = () => {
     }
   };
 
+  const [confirmDialog, setConfirmDialog] = useState(false);
+
   const handleSoftDelete = async () => {
-    if (window.confirm(`Are you sure you want to delete ${user.fullName}? (Soft Delete)`)) {
-      await userService.softDeleteUser(uid);
-      navigate('/admin/users');
-    }
+    setConfirmDialog(true);
+  };
+
+  const executeSoftDelete = async () => {
+    await userService.softDeleteUser(uid);
+    setConfirmDialog(false);
+    navigate('/admin/users');
   };
 
   if (loading) {
@@ -154,7 +159,7 @@ export const UserDetailPage = () => {
 
       {/* Layout Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column: QR Code & Status Overview */}
+        {/* Left Column: Status & System Overview */}
         <div className="space-y-6">
           <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-center shadow-xs">
             <CardHeader className="pb-2">
@@ -169,11 +174,10 @@ export const UserDetailPage = () => {
             </CardHeader>
 
             <CardContent className="pt-4 space-y-4">
-              <QRCodeDisplay value={user.qrCode || user.memberId} size={150} />
-
               <div className="p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-mono text-left space-y-1">
                 <div className="text-slate-400 dark:text-slate-500 font-sans text-[10px] uppercase font-bold">System Details</div>
                 <div><span className="text-slate-500 dark:text-slate-400">Firebase UID:</span> <span className="text-slate-800 dark:text-slate-200 font-semibold">{user.uid}</span></div>
+                <div><span className="text-slate-500 dark:text-slate-400">Member ID:</span> <span className="text-slate-800 dark:text-slate-200 font-semibold">{user.memberId || 'N/A'}</span></div>
                 <div><span className="text-slate-500 dark:text-slate-400">Created:</span> <span className="text-slate-800 dark:text-slate-200">{new Date(user.createdAt).toLocaleDateString()}</span></div>
                 <div><span className="text-slate-500 dark:text-slate-400">Last Update:</span> <span className="text-slate-800 dark:text-slate-200">{new Date(user.updatedAt).toLocaleDateString()}</span></div>
               </div>
@@ -328,6 +332,16 @@ export const UserDetailPage = () => {
         onClose={() => setShowRejectDialog(false)}
         user={user}
         onRejected={loadUser}
+      />
+
+      <ConfirmDialog
+        isOpen={confirmDialog}
+        onClose={() => setConfirmDialog(false)}
+        onConfirm={executeSoftDelete}
+        title={`Hapus Pengguna "${user.fullName}"?`}
+        description={`Apakah Anda yakin ingin menghapus pengguna ${user.fullName}? (Soft Delete)`}
+        confirmText="Hapus Pengguna"
+        variant="danger"
       />
     </div>
   );

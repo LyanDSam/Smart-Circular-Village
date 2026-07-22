@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { QRCodeDisplay } from '@/components/common/QRCodeDisplay';
 import { PageHeader } from '@/components/common/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatusBadge, RoleBadge } from '@/features/users/components/StatusBadge';
@@ -16,8 +15,8 @@ import {
   CreditCard,
   History,
   Gift,
-  QrCode,
   Bell,
+  ShieldCheck,
 } from 'lucide-react';
 
 export const CitizenDashboard = () => {
@@ -50,7 +49,6 @@ export const CitizenDashboard = () => {
   }, [userProfile?.uid]);
 
   const citizenActions = [
-    { label: 'Kartu QR Saya', path: '/my-qr', icon: QrCode },
     { label: 'Riwayat Setoran Full', path: '/deposit-history', icon: History },
     { label: 'Katalog Reward', path: '/rewards', icon: Gift },
     { label: 'Notifikasi', path: '/notifications', icon: Bell },
@@ -61,7 +59,7 @@ export const CitizenDashboard = () => {
       {/* 1. Welcome Header */}
       <PageHeader
         title={`Selamat datang, ${userProfile?.fullName || 'Warga'}!`}
-        description="Ringkasan poin, kartu digital, riwayat setoran, dan reward pribadi Anda."
+        description="Ringkasan poin, identitas digital, riwayat setoran, dan reward pribadi Anda."
         icon={Leaf}
       >
         <div className="flex items-center gap-2">
@@ -83,32 +81,41 @@ export const CitizenDashboard = () => {
           <QuickActionCard title="Menu Cepat Warga" actions={citizenActions} />
         </div>
 
-        {/* Digital QR Card */}
+        {/* Digital Identity Member Card */}
         <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs flex flex-col justify-between">
           <CardHeader className="pb-2 text-center">
-            <CardTitle className="text-sm font-bold text-slate-800 dark:text-slate-200">
-              Kartu QR Digital Warga
+            <CardTitle className="text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center justify-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              <span>Kartu Keanggotaan Warga</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="flex flex-col items-center space-y-3 pt-0">
-            <div className="p-3 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-inner">
-              <QRCodeDisplay
-                value={userProfile?.qrCode || userProfile?.memberId || 'SCV-26-000101'}
-                size={140}
-              />
+          <CardContent className="flex flex-col items-center space-y-4 pt-2">
+            <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 rounded-2xl border border-emerald-200 dark:border-emerald-900 w-full text-center space-y-1">
+              <span className="text-[10px] uppercase font-bold text-emerald-700 dark:text-emerald-400 tracking-wider block">
+                Official SCV Citizen ID
+              </span>
+              <div className="text-xl font-extrabold text-slate-900 dark:text-slate-100 font-mono">
+                {userProfile?.memberId || 'SCV-26-000101'}
+              </div>
             </div>
-            <div className="text-center space-y-0.5">
-              <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
+
+            <div className="text-center space-y-1">
+              <p className="text-base font-extrabold text-slate-900 dark:text-slate-100">
                 {userProfile?.fullName || 'Warga SCV'}
               </p>
-              <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">
-                {userProfile?.memberId || 'SCV-26-000101'}
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {userProfile?.email || '-'}
               </p>
             </div>
-            {userProfile?.rfidUid && (
-              <div className="flex items-center gap-1.5 text-xs font-mono font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-700">
-                <CreditCard className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                <span>RFID: {userProfile.rfidUid}</span>
+
+            {userProfile?.rfidUid ? (
+              <div className="flex items-center gap-1.5 text-xs font-mono font-semibold text-emerald-800 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/60 px-3.5 py-1.5 rounded-full border border-emerald-300 dark:border-emerald-800">
+                <CreditCard className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <span>Kartu RFID: {userProfile.rfidUid}</span>
+              </div>
+            ) : (
+              <div className="text-xs italic text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-3 py-1.5 rounded-full border border-amber-200 dark:border-amber-900">
+                Kartu RFID Belum Ditautkan
               </div>
             )}
           </CardContent>

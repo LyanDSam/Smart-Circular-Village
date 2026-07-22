@@ -174,7 +174,6 @@ async function bootstrap() {
       status: 'active',
       points: 0,
       rfidUid: null,
-      qrCode: ADMIN_MEMBER_ID,
       isDeleted: false,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),

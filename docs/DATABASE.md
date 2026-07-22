@@ -32,7 +32,6 @@ The Smart Circular Village platform separates structured business data from high
   "status": "active",
   "points": 840,
   "rfidUid": "04A91B2F",
-  "qrCode": "SCV-26-000001",
   "rejectionReason": null,
   "isDeleted": false,
   "createdAt": "2026-07-21T10:00:00.000Z",

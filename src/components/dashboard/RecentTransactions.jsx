@@ -41,8 +41,8 @@ export const RecentTransactions = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 text-slate-700 dark:text-slate-300">
-            {transactions.slice(0, isCompact ? 5 : 10).map((tx) => (
-              <tr key={tx.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+            {transactions.slice(0, isCompact ? 5 : 10).map((tx, idx) => (
+              <tr key={tx.id || tx.transactionId || `tx-${idx}`} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
                 <td className="py-3.5 px-6 font-mono font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                   <ArrowLeftRight className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                   <span>{tx.id}</span>

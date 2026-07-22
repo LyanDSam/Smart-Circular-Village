@@ -11,7 +11,7 @@
 **Smart Circular Village (SCV)** is an Internet of Things (IoT)-based web platform designed to digitalize, automate, and optimize organic and inorganic waste management at the village level.
 
 The platform integrates two core subsystems:
-1. **Digital Waste Bank (Smart Collection Station)**: Automated weighing (Load Cell) and citizen identification via RFID cards and QR Codes with point-based rewards.
+1. **Digital Waste Bank (Smart Collection Station)**: Automated weighing (Load Cell) and citizen identification via physical RFID cards with point-based rewards.
 2. **Smart Compost Bin Monitoring System**: Real-time telemetry monitoring (Temperature, Humidity, Soil Moisture, Methane Gas, Leachate Water Level) and actuator controls (Aeration Fan & Irrigation Water Pump) via ESP32 microcontrollers.
 
 ---

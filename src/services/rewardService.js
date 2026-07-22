@@ -5,36 +5,52 @@ import {
   getDocs,
   setDoc,
   updateDoc,
-  deleteDoc,
+  writeBatch,
   query,
   where,
+  increment,
   serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '@/firebase/firestore';
 
 /**
- * rewardService — Manage Reward Catalog and Reward Redemptions in Firestore.
+ * Helper to generate a unique SCV Redemption Voucher ID.
+ * Format: SCV-RWD-XXXXXX (e.g. SCV-RWD-4B82A9)
+ */
+export const generateRedemptionId = () => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let randomSeq = '';
+  for (let i = 0; i < 6; i++) {
+    randomSeq += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return `SCV-RWD-${randomSeq}`;
+};
+
+/**
+ * rewardService — Complete Sprint 5 Reward Management & Redemption System.
  *
  * Collections:
  * 1. `rewards`
- *    - rewardId, title, description, pointsRequired, stock, isActive, createdAt, updatedAt
+ *    - rewardId, name, description, imageUrl, pointsRequired, stock, category, isActive, isDeleted, createdAt, updatedAt
  * 2. `reward_redemptions`
- *    - redemptionId, userId, userName, rewardId, rewardTitle, pointsUsed, status ('requested'|'approved'|'rejected'|'collected'), requestedAt, processedBy, processedAt
+ *    - redemptionId, userId, userName, userMemberId, rewardId, rewardName, rewardImageUrl, pointsRequired, status ('pending'|'completed'|'rejected'), officerId, rejectionReason, createdAt, completedAt
  */
 export const rewardService = {
-  // ─── REWARDS MANAGEMENT (Officer Operations) ───
+  // ─── REWARDS CATALOG MANAGEMENT (Officer & Admin) ───
 
   /**
-   * Get all rewards (Officer & Admin view all, Citizens view active only)
+   * Get all rewards from Firestore `rewards` collection.
    */
   async getRewards({ activeOnly = false } = {}) {
     try {
       const rewardsRef = collection(db, 'rewards');
       const qSnap = await getDocs(rewardsRef);
-      let list = qSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      let list = qSnap.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .filter((r) => r.isDeleted !== true);
 
       if (activeOnly) {
-        list = list.filter((r) => r.isActive !== false);
+        list = list.filter((r) => r.isActive !== false && Number(r.stock) > 0);
       }
 
       list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
@@ -46,7 +62,7 @@ export const rewardService = {
   },
 
   /**
-   * Get single reward details by ID
+   * Get single reward details by ID.
    */
   async getRewardById(rewardId) {
     if (!rewardId) return null;
@@ -63,21 +79,25 @@ export const rewardService = {
   },
 
   /**
-   * Create a new reward item (Officer Only)
+   * Create a new reward item (Officer/Admin).
    */
-  async createReward({ title, description, pointsRequired, stock, isActive = true }) {
-    if (!title || !pointsRequired) {
-      throw new Error('Reward title and points required are mandatory.');
+  async createReward({ name, description, imageUrl, pointsRequired, stock, category = 'umum', isActive = true }) {
+    const rewardName = (name || '').trim();
+    if (!rewardName || !pointsRequired) {
+      throw new Error('Nama reward dan jumlah poin yang dibutuhkan wajib diisi.');
     }
 
     const newDocRef = doc(collection(db, 'rewards'));
     const rewardData = {
       rewardId: newDocRef.id,
-      title: title.trim(),
+      name: rewardName,
       description: description ? description.trim() : '',
+      imageUrl: imageUrl ? imageUrl.trim() : '',
       pointsRequired: Number(pointsRequired),
       stock: Number(stock || 0),
+      category: category ? category.trim().toLowerCase() : 'umum',
       isActive: Boolean(isActive),
+      isDeleted: false,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
@@ -87,18 +107,20 @@ export const rewardService = {
   },
 
   /**
-   * Update existing reward item (Officer Only)
+   * Update existing reward item.
    */
-  async updateReward(rewardId, { title, description, pointsRequired, stock, isActive }) {
+  async updateReward(rewardId, { name, description, imageUrl, pointsRequired, stock, category, isActive }) {
     const ref = doc(db, 'rewards', rewardId);
     const updateData = {
       updatedAt: serverTimestamp(),
     };
 
-    if (title !== undefined) updateData.title = title.trim();
+    if (name !== undefined) updateData.name = name.trim();
     if (description !== undefined) updateData.description = description.trim();
+    if (imageUrl !== undefined) updateData.imageUrl = imageUrl.trim();
     if (pointsRequired !== undefined) updateData.pointsRequired = Number(pointsRequired);
     if (stock !== undefined) updateData.stock = Number(stock);
+    if (category !== undefined) updateData.category = category.trim().toLowerCase();
     if (isActive !== undefined) updateData.isActive = Boolean(isActive);
 
     await updateDoc(ref, updateData);
@@ -106,16 +128,20 @@ export const rewardService = {
   },
 
   /**
-   * Delete reward item (Officer Only)
+   * Soft delete reward item.
    */
   async deleteReward(rewardId) {
     const ref = doc(db, 'rewards', rewardId);
-    await deleteDoc(ref);
+    await updateDoc(ref, {
+      isDeleted: true,
+      isActive: false,
+      updatedAt: serverTimestamp(),
+    });
     return true;
   },
 
   /**
-   * Toggle reward active status
+   * Toggle reward active status.
    */
   async toggleRewardStatus(rewardId, currentStatus) {
     const ref = doc(db, 'rewards', rewardId);
@@ -126,61 +152,140 @@ export const rewardService = {
     return true;
   },
 
-  // ─── REDEMPTIONS MANAGEMENT (Citizen & Officer Operations) ───
+  // ─── REDEMPTION REQUEST & CONFIRMATION (Citizen & Officer) ───
 
   /**
-   * Citizen requests a reward redemption
+   * Citizen requests a reward redemption.
+   * NOTE: Points and stock are NOT deducted immediately upon request creation!
    */
-  async redeemReward(userId, userName, rewardId) {
+  async requestRedemption(userId, userProfile, rewardId) {
     const reward = await this.getRewardById(rewardId);
-    if (!reward) throw new Error('Reward not found.');
-    if (!reward.isActive) throw new Error('Reward is currently inactive.');
-    if (reward.stock <= 0) throw new Error('Reward is out of stock.');
+    if (!reward) throw new Error('Reward tidak ditemukan.');
+    if (!reward.isActive) throw new Error('Reward sedang dalam status non-aktif.');
+    if (Number(reward.stock) <= 0) throw new Error('Stok reward telah habis.');
 
-    // Fetch citizen user doc to verify points
-    const userRef = doc(db, 'users', userId);
-    const userSnap = await getDoc(userRef);
-    if (!userSnap.exists()) throw new Error('Citizen user not found.');
-
-    const userProfile = userSnap.data();
-    const currentPoints = userProfile.points || 0;
-
-    if (currentPoints < reward.pointsRequired) {
-      throw new Error(`Insufficient points. You need ${reward.pointsRequired} points but have ${currentPoints} points.`);
+    const currentPoints = userProfile?.points || 0;
+    if (currentPoints < Number(reward.pointsRequired)) {
+      throw new Error(`Poin tidak mencukupi. Anda membutuhkan ${reward.pointsRequired} poin (Poin Anda: ${currentPoints}).`);
     }
 
-    // Deduct points & reduce stock
-    await updateDoc(userRef, {
-      points: currentPoints - reward.pointsRequired,
-      updatedAt: serverTimestamp(),
-    });
+    const redemptionId = generateRedemptionId();
+    const redDocRef = doc(db, 'reward_redemptions', redemptionId);
 
-    await updateDoc(doc(db, 'rewards', rewardId), {
-      stock: reward.stock - 1,
-      updatedAt: serverTimestamp(),
-    });
-
-    // Create redemption record in `reward_redemptions`
-    const redemptionRef = doc(collection(db, 'reward_redemptions'));
     const redemptionData = {
-      redemptionId: redemptionRef.id,
+      redemptionId,
       userId,
-      userName: userName || userProfile.fullName || 'Citizen',
+      userName: userProfile?.fullName || 'Warga SCV',
+      userMemberId: userProfile?.memberId || 'N/A',
       rewardId,
-      rewardTitle: reward.title,
-      pointsUsed: reward.pointsRequired,
-      status: 'requested', // 'requested' | 'approved' | 'rejected' | 'collected'
-      requestedAt: serverTimestamp(),
-      processedBy: null,
-      processedAt: null,
+      rewardName: reward.name || reward.title || 'Reward SCV',
+      rewardImageUrl: reward.imageUrl || '',
+      pointsRequired: Number(reward.pointsRequired),
+      status: 'pending', // 'pending' | 'completed' | 'rejected'
+      officerId: null,
+      rejectionReason: null,
+      createdAt: serverTimestamp(),
+      completedAt: null,
     };
 
-    await setDoc(redemptionRef, redemptionData);
-    return { id: redemptionRef.id, ...redemptionData };
+    await setDoc(redDocRef, redemptionData);
+    return { id: redemptionId, ...redemptionData };
   },
 
   /**
-   * Fetch redemptions by User ID (Citizen View)
+   * Confirm redemption request via Atomic WriteBatch.
+   * Performs:
+   * 1. Update `reward_redemptions/{redemptionId}` status -> 'completed', completedAt, officerId
+   * 2. Decrease `users/{userId}.points` using increment(-pointsRequired)
+   * 3. Decrease `rewards/{rewardId}.stock` using increment(-1)
+   */
+  async confirmRedemption(redemptionId, officerId) {
+    if (!redemptionId) throw new Error('Redemption ID required.');
+
+    const redRef = doc(db, 'reward_redemptions', redemptionId);
+    const redSnap = await getDoc(redRef);
+    if (!redSnap.exists()) throw new Error(`Voucher penukaran "${redemptionId}" tidak ditemukan.`);
+
+    const redemption = redSnap.data();
+    if (redemption.status === 'completed') {
+      throw new Error(`Penukaran "${redemptionId}" sudah pernah dikonfirmasi sebelumnya.`);
+    }
+    if (redemption.status === 'rejected') {
+      throw new Error(`Penukaran "${redemptionId}" telah ditolak dan tidak dapat dikonfirmasi.`);
+    }
+
+    // Verify current user points
+    const userRef = doc(db, 'users', redemption.userId);
+    const userSnap = await getDoc(userRef);
+    if (!userSnap.exists()) throw new Error('Data akun warga penyetor tidak ditemukan.');
+    const userPoints = userSnap.data().points || 0;
+    if (userPoints < redemption.pointsRequired) {
+      throw new Error(`Poin warga (${userPoints}) tidak mencukupi untuk penukaran ini (${redemption.pointsRequired} poin).`);
+    }
+
+    // Verify reward stock
+    const rewardRef = doc(db, 'rewards', redemption.rewardId);
+    const rewardSnap = await getDoc(rewardRef);
+    if (!rewardSnap.exists()) throw new Error('Data reward item tidak ditemukan.');
+    const currentStock = rewardSnap.data().stock || 0;
+    if (currentStock <= 0) {
+      throw new Error('Stok reward item ini telah habis.');
+    }
+
+    // Atomic WriteBatch execution
+    const batch = writeBatch(db);
+
+    // 1. Update redemption status to completed
+    batch.update(redRef, {
+      status: 'completed',
+      officerId: officerId || 'officer',
+      completedAt: serverTimestamp(),
+    });
+
+    // 2. Deduct points from user
+    batch.update(userRef, {
+      points: increment(-Number(redemption.pointsRequired)),
+      updatedAt: serverTimestamp(),
+    });
+
+    // 3. Deduct 1 stock from reward item
+    batch.update(rewardRef, {
+      stock: increment(-1),
+      updatedAt: serverTimestamp(),
+    });
+
+    await batch.commit();
+    return true;
+  },
+
+  /**
+   * Reject redemption request.
+   * Points and stock remain untouched because they were not deducted on pending creation.
+   */
+  async rejectRedemption(redemptionId, officerId, rejectionReason = '') {
+    if (!redemptionId) throw new Error('Redemption ID required.');
+
+    const redRef = doc(db, 'reward_redemptions', redemptionId);
+    const redSnap = await getDoc(redRef);
+    if (!redSnap.exists()) throw new Error(`Voucher penukaran "${redemptionId}" tidak ditemukan.`);
+
+    const redemption = redSnap.data();
+    if (redemption.status === 'completed') {
+      throw new Error('Penukaran yang sudah selesai tidak dapat dibatalkan/ditolak.');
+    }
+
+    await updateDoc(redRef, {
+      status: 'rejected',
+      officerId: officerId || 'officer',
+      rejectionReason: rejectionReason ? rejectionReason.trim() : 'Ditolak oleh petugas station.',
+      completedAt: serverTimestamp(),
+    });
+
+    return true;
+  },
+
+  /**
+   * Fetch redemptions by User ID (Citizen View).
    */
   async getCitizenRedemptions(userId) {
     if (!userId) return [];
@@ -189,7 +294,7 @@ export const rewardService = {
       const q = query(redRef, where('userId', '==', userId));
       const snap = await getDocs(q);
       const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      list.sort((a, b) => new Date(b.requestedAt || 0) - new Date(a.requestedAt || 0));
+      list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
       return list;
     } catch (err) {
       console.error('Error fetching citizen redemptions:', err);
@@ -198,7 +303,7 @@ export const rewardService = {
   },
 
   /**
-   * Fetch all redemptions (Officer & Admin View)
+   * Fetch all redemptions (Officer & Admin View).
    */
   async getAllRedemptions({ statusFilter = 'all' } = {}) {
     try {
@@ -210,7 +315,7 @@ export const rewardService = {
         list = list.filter((r) => r.status === statusFilter);
       }
 
-      list.sort((a, b) => new Date(b.requestedAt || 0) - new Date(a.requestedAt || 0));
+      list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
       return list;
     } catch (err) {
       console.error('Error fetching all redemptions:', err);
@@ -219,49 +324,45 @@ export const rewardService = {
   },
 
   /**
-   * Officer updates redemption status (Approve, Reject, Mark Collected)
+   * Get redemption metrics for dashboard cards.
    */
-  async updateRedemptionStatus(redemptionId, newStatus, officerUid) {
-    const validStatuses = ['approved', 'rejected', 'collected'];
-    if (!validStatuses.includes(newStatus)) {
-      throw new Error(`Invalid redemption status: ${newStatus}`);
+  async getRedemptionStats() {
+    try {
+      const rewardsRef = collection(db, 'rewards');
+      const rewardsSnap = await getDocs(rewardsRef);
+      const activeRewardsCount = rewardsSnap.docs.filter((d) => d.data().isActive !== false && !d.data().isDeleted).length;
+
+      const redRef = collection(db, 'reward_redemptions');
+      const redSnap = await getDocs(redRef);
+      const redemptions = redSnap.docs.map((d) => d.data());
+
+      const pendingCount = redemptions.filter((r) => r.status === 'pending').length;
+      
+      const todayStr = new Date().toDateString();
+      const completedTodayCount = redemptions.filter((r) => {
+        if (r.status !== 'completed' || !r.completedAt) return false;
+        const dateObj = r.completedAt.toDate ? r.completedAt.toDate() : new Date(r.completedAt);
+        return dateObj.toDateString() === todayStr;
+      }).length;
+
+      const totalPointsRedeemed = redemptions
+        .filter((r) => r.status === 'completed')
+        .reduce((sum, r) => sum + (Number(r.pointsRequired) || 0), 0);
+
+      return {
+        activeRewardsCount,
+        pendingCount,
+        completedTodayCount,
+        totalPointsRedeemed,
+      };
+    } catch (err) {
+      console.error('Error calculating redemption stats:', err);
+      return {
+        activeRewardsCount: 0,
+        pendingCount: 0,
+        completedTodayCount: 0,
+        totalPointsRedeemed: 0,
+      };
     }
-
-    const redRef = doc(db, 'reward_redemptions', redemptionId);
-    const redSnap = await getDoc(redRef);
-    if (!redSnap.exists()) throw new Error('Redemption record not found.');
-
-    const redemption = redSnap.data();
-
-    // If rejecting, refund points to citizen and restore stock
-    if (newStatus === 'rejected' && redemption.status !== 'rejected') {
-      const userRef = doc(db, 'users', redemption.userId);
-      const userSnap = await getDoc(userRef);
-      if (userSnap.exists()) {
-        const currentPoints = userSnap.data().points || 0;
-        await updateDoc(userRef, {
-          points: currentPoints + redemption.pointsUsed,
-          updatedAt: serverTimestamp(),
-        });
-      }
-
-      const rewardRef = doc(db, 'rewards', redemption.rewardId);
-      const rewardSnap = await getDoc(rewardRef);
-      if (rewardSnap.exists()) {
-        const currentStock = rewardSnap.data().stock || 0;
-        await updateDoc(rewardRef, {
-          stock: currentStock + 1,
-          updatedAt: serverTimestamp(),
-        });
-      }
-    }
-
-    await updateDoc(redRef, {
-      status: newStatus,
-      processedBy: officerUid || 'officer',
-      processedAt: serverTimestamp(),
-    });
-
-    return true;
   },
 };

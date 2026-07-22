@@ -4,24 +4,29 @@ import { useClientSettings } from '@/context/ClientSettingsContext';
 import { rewardService } from '@/services/rewardService';
 import { PageHeader } from '@/components/common/PageHeader';
 import { SectionCard } from '@/components/common/SectionCard';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ConfirmDialog } from '@/components/common/ConfirmDialog';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { LoadingState } from '@/components/common/LoadingState';
 import { EmptyState } from '@/components/common/EmptyState';
+import { RewardFormModal } from '@/features/rewards/components/RewardFormModal';
+import { RedemptionTicketModal } from '@/features/rewards/components/RedemptionTicketModal';
 import {
   Gift,
   Plus,
   Trash2,
-  Edit,
-  XCircle,
-  Package,
+  Edit3,
   RefreshCw,
   ShoppingBag,
-  Check,
   Search,
   Filter,
+  Ticket,
+  CheckCircle2,
+  Clock,
+  XCircle,
+  AlertCircle,
 } from 'lucide-react';
 
 export const RewardsPage = () => {
@@ -35,21 +40,34 @@ export const RewardsPage = () => {
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all'); // 'all' | 'active' | 'inactive'
+  const [filterCategory, setFilterCategory] = useState('all');
 
-  // Modal / Form state for Authorized CRUD (Officer & Admin)
+  // Modals & Feedback
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingReward, setEditingReward] = useState(null);
-  const [formData, setFormData] = useState({
+  const [ticketModalOpen, setTicketModalOpen] = useState(false);
+  const [selectedRedemption, setSelectedRedemption] = useState(null);
+
+  // Custom Confirm Dialog State
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
     title: '',
     description: '',
-    pointsRequired: 500,
-    stock: 10,
-    isActive: true,
+    confirmText: 'Konfirmasi',
+    variant: 'primary',
+    onConfirm: () => {},
   });
+
+  const [feedback, setFeedback] = useState(null); // { type: 'success' | 'error', text: '' }
+
+  const showToast = (text, type = 'success') => {
+    setFeedback({ text, type });
+    setTimeout(() => setFeedback(null), 5000);
+  };
 
   const canManage = role === 'officer' || role === 'admin';
   const isCitizen = role === 'citizen';
+  const userPoints = userProfile?.points ?? 0;
 
   const fetchData = async () => {
     setLoading(true);
@@ -73,145 +91,143 @@ export const RewardsPage = () => {
 
   useEffect(() => {
     fetchData();
-  }, [role, userProfile]);
+  }, [role, userProfile?.uid]);
 
-  // Authorized CRUD handlers
-  const handleOpenForm = (reward = null) => {
-    if (!canManage) return;
-    if (reward) {
-      setEditingReward(reward);
-      setFormData({
-        title: reward.title,
-        description: reward.description || '',
-        pointsRequired: reward.pointsRequired,
-        stock: reward.stock,
-        isActive: reward.isActive !== false,
-      });
-    } else {
-      setEditingReward(null);
-      setFormData({
-        title: '',
-        description: '',
-        pointsRequired: 500,
-        stock: 10,
-        isActive: true,
-      });
-    }
-    setIsFormOpen(true);
-  };
-
-  const handleSaveReward = async (e) => {
-    e.preventDefault();
-    if (!canManage) return;
+  // Handle Create/Update Reward Form Submit
+  const handleFormSubmit = async (formData) => {
     setActionLoading(true);
     try {
       if (editingReward) {
-        await rewardService.updateReward(editingReward.id, formData);
+        await rewardService.updateReward(editingReward.rewardId || editingReward.id, formData);
+        showToast(`Item reward "${formData.name}" berhasil diperbarui.`);
       } else {
         await rewardService.createReward(formData);
+        showToast(`Item reward baru "${formData.name}" berhasil ditambahkan!`);
       }
       setIsFormOpen(false);
       fetchData();
     } catch (err) {
-      alert(err.message);
+      showToast(err.message || 'Gagal menyimpan reward.', 'error');
     } finally {
       setActionLoading(false);
     }
   };
 
-  const handleDeleteReward = async (rewardId) => {
-    if (!canManage) return;
-    if (!window.confirm('Apakah Anda yakin ingin menghapus item reward ini?')) return;
-    setActionLoading(true);
-    try {
-      await rewardService.deleteReward(rewardId);
-      fetchData();
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      setActionLoading(false);
-    }
+  const handleOpenEdit = (reward) => {
+    setEditingReward(reward);
+    setIsFormOpen(true);
+  };
+
+  const handleOpenCreate = () => {
+    setEditingReward(null);
+    setIsFormOpen(true);
+  };
+
+  // Custom Confirm Delete Reward
+  const promptDeleteReward = (rewardId, name) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: `Hapus Reward "${name}"?`,
+      description: 'Apakah Anda yakin ingin menghapus item reward ini dari katalog?',
+      confirmText: 'Ya, Hapus Reward',
+      variant: 'danger',
+      onConfirm: async () => {
+        setActionLoading(true);
+        try {
+          await rewardService.deleteReward(rewardId);
+          showToast(`Reward "${name}" berhasil dihapus.`);
+          fetchData();
+        } catch (err) {
+          showToast(err.message || 'Gagal menghapus reward.', 'error');
+        } finally {
+          setActionLoading(false);
+          setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        }
+      },
+    });
   };
 
   const handleToggleStatus = async (rewardId, currentStatus) => {
-    if (!canManage) return;
     try {
       await rewardService.toggleRewardStatus(rewardId, currentStatus);
+      showToast(`Status reward berhasil diubah menjadi ${!currentStatus ? 'Aktif' : 'Non-Aktif'}.`);
       fetchData();
     } catch (err) {
-      alert(err.message);
+      showToast(err.message || 'Gagal mengubah status reward.', 'error');
     }
   };
 
-  // Citizen Redeem handler
-  const handleRedeem = async (reward) => {
-    if (!window.confirm(`Tukarkan "${reward.title}" dengan ${reward.pointsRequired} poin?`)) return;
-    setActionLoading(true);
-    try {
-      await rewardService.redeemReward(
-        userProfile?.uid || user?.uid,
-        userProfile?.fullName || 'Citizen',
-        reward.id
-      );
-      alert(`Permohonan penukaran "${reward.title}" berhasil diajukan!`);
-      fetchData();
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      setActionLoading(false);
+  // Custom Confirm Citizen Redeem Request
+  const promptRedeem = (reward) => {
+    if (userPoints < Number(reward.pointsRequired)) {
+      showToast(`Poin Anda (${userPoints}) tidak cukup untuk menukar ${reward.name} (${reward.pointsRequired} poin).`, 'error');
+      return;
     }
+    if (Number(reward.stock) <= 0) {
+      showToast('Stok barang ini sedang habis.', 'error');
+      return;
+    }
+
+    setConfirmDialog({
+      isOpen: true,
+      title: `Tukarkan "${reward.name}"?`,
+      description: `Konfirmasi permohonan penukaran reward dengan ${reward.pointsRequired} poin. Voucher QR Code akan langsung diterbitkan.`,
+      confirmText: 'Ya, Tukarkan Poin',
+      variant: 'primary',
+      onConfirm: async () => {
+        setActionLoading(true);
+        try {
+          const redemption = await rewardService.requestRedemption(
+            userProfile?.uid || user?.uid,
+            userProfile,
+            reward.rewardId || reward.id
+          );
+          showToast(`Permohonan penukaran "${reward.name}" berhasil diajukan! Voucher QR Code siap diproses petugas.`);
+          setSelectedRedemption(redemption);
+          setTicketModalOpen(true);
+          fetchData();
+        } catch (err) {
+          showToast(err.message || 'Gagal mengajukan penukaran.', 'error');
+        } finally {
+          setActionLoading(false);
+          setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        }
+      },
+    });
   };
 
-  // Officer / Admin Redemption Status Update handler
-  const handleUpdateRedemptionStatus = async (redemptionId, newStatus) => {
-    if (!canManage) return;
-    setActionLoading(true);
-    try {
-      await rewardService.updateRedemptionStatus(
-        redemptionId,
-        newStatus,
-        userProfile?.uid || user?.uid || 'operator'
-      );
-      fetchData();
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  // Filter rewards by search query & status
+  // Filter rewards
   const filteredRewards = rewards.filter((r) => {
-    const matchesSearch =
-      r.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (r.description && r.description.toLowerCase().includes(searchQuery.toLowerCase()));
-    const matchesStatus =
-      filterStatus === 'all' ||
-      (filterStatus === 'active' && r.isActive !== false) ||
-      (filterStatus === 'inactive' && r.isActive === false);
-    return matchesSearch && matchesStatus;
+    const titleMatch = (r.name || r.title || '').toLowerCase().includes(searchQuery.toLowerCase());
+    const descMatch = (r.description || '').toLowerCase().includes(searchQuery.toLowerCase());
+    const catMatch = filterCategory === 'all' || (r.category || 'embako').toLowerCase() === filterCategory.toLowerCase();
+    return (titleMatch || descMatch) && catMatch;
   });
 
   if (loading) {
-    return <LoadingState message={t('loadingRewardsData')} />;
+    return <LoadingState message="Memuat katalog reward..." />;
   }
 
   return (
     <div className="space-y-6 font-sans">
       {/* Header */}
       <PageHeader
-        title={canManage ? t('rewardsTitleAdmin') : t('rewardsTitleCitizen')}
-        description={canManage ? t('rewardsDescAdmin') : t('rewardsDescCitizen')}
+        title={canManage ? 'Kelola Katalog Reward' : 'Katalog Reward Bank Sampah'}
+        description={
+          canManage
+            ? 'Kelola barang reward, atur poin required, jumlah stok, dan pantau klaim voucher warga.'
+            : `Tukarkan poin setoran sampah Anda (${userPoints.toLocaleString()} Pts) dengan berbagai barang reward bermanfaat.`
+        }
         icon={Gift}
       >
         <div className="flex items-center gap-2">
           {canManage && (
             <Button
-              onClick={() => handleOpenForm()}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs gap-1.5 h-9"
+              onClick={handleOpenCreate}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs gap-1.5 h-9 font-bold shadow-xs"
             >
               <Plus className="w-4 h-4" />
-              <span>{t('addReward')}</span>
+              <span>Tambah Reward</span>
             </Button>
           )}
           <Button
@@ -221,10 +237,28 @@ export const RewardsPage = () => {
             className="text-xs h-9 gap-1 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300"
           >
             <RefreshCw className="w-3.5 h-3.5" />
-            <span>{t('refresh')}</span>
+            <span>Refresh</span>
           </Button>
         </div>
       </PageHeader>
+
+      {/* Toast Feedback */}
+      {feedback && (
+        <div
+          className={`p-4 rounded-2xl border flex items-center gap-3 text-xs font-semibold animate-in fade-in duration-200 ${
+            feedback.type === 'error'
+              ? 'bg-rose-50 text-rose-800 border-rose-200 dark:bg-rose-950/80 dark:text-rose-200 dark:border-rose-900'
+              : 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/80 dark:text-emerald-200 dark:border-emerald-900'
+          }`}
+        >
+          {feedback.type === 'error' ? (
+            <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+          ) : (
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+          )}
+          <span>{feedback.text}</span>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
@@ -237,7 +271,7 @@ export const RewardsPage = () => {
                 : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
           >
-            {t('rewardCatalogTab')} ({rewards.length})
+            Katalog Barang ({rewards.length})
           </button>
           <button
             onClick={() => setActiveTab('redemptions')}
@@ -247,298 +281,269 @@ export const RewardsPage = () => {
                 : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
           >
-            {t('redemptionHistoryTab')} ({redemptions.length})
+            {isCitizen ? `Voucher Penukaran Saya (${redemptions.length})` : `Semua Voucher (${redemptions.length})`}
           </button>
         </div>
-
-        {canManage && (
-          <Badge variant="outline" className="text-[11px] text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900 gap-1 hidden sm:flex">
-            <Check className="w-3 h-3" />
-            {t('userAccess')} ({role.toUpperCase()})
-          </Badge>
-        )}
       </div>
 
       {/* ─── TAB 1: REWARD CATALOG ─── */}
       {activeTab === 'catalog' && (
         <>
-          {/* Form Modal / Card for Authorized Roles */}
-          {isFormOpen && canManage && (
-            <Card className="border-emerald-200 dark:border-emerald-900 bg-emerald-50/50 dark:bg-emerald-950/30 shadow-md">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center justify-between">
-                  <span>{editingReward ? t('editReward') : t('addReward')}</span>
-                  <Button variant="ghost" size="sm" onClick={() => setIsFormOpen(false)} className="text-xs">
-                    {t('cancel')}
-                  </Button>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleSaveReward} className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                  <div>
-                    <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">{t('rewardName')} *</label>
-                    <Input
-                      required
-                      value={formData.title}
-                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                      placeholder="e.g. Minyak Goreng 1L"
-                      className="bg-white dark:bg-slate-950 text-xs h-9"
-                    />
-                  </div>
-                  <div>
-                    <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">{t('pointsRequired')} *</label>
-                    <Input
-                      type="number"
-                      required
-                      min={1}
-                      value={formData.pointsRequired}
-                      onChange={(e) => setFormData({ ...formData, pointsRequired: e.target.value })}
-                      className="bg-white dark:bg-slate-950 text-xs h-9"
-                    />
-                  </div>
-                  <div>
-                    <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">{t('stockAmount')} *</label>
-                    <Input
-                      type="number"
-                      required
-                      min={0}
-                      value={formData.stock}
-                      onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
-                      className="bg-white dark:bg-slate-950 text-xs h-9"
-                    />
-                  </div>
-                  <div>
-                    <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">{t('descriptionLabel')}</label>
-                    <Input
-                      value={formData.description}
-                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                      placeholder="..."
-                      className="bg-white dark:bg-slate-950 text-xs h-9"
-                    />
-                  </div>
-                  <div className="md:col-span-2 flex items-center justify-between pt-2 border-t border-emerald-200/60 dark:border-emerald-900/60">
-                    <label className="flex items-center space-x-2 text-slate-700 dark:text-slate-300 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={formData.isActive}
-                        onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                        className="rounded text-emerald-600 focus:ring-emerald-500"
-                      />
-                      <span className="font-semibold">{t('activeStatusLabel')}</span>
-                    </label>
-
-                    <Button type="submit" disabled={actionLoading} className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs">
-                      {actionLoading ? t('saving') : editingReward ? t('edit') : t('saveReward')}
-                    </Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Search & Filter Bar */}
+          {/* Search & Category Filters */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div className="relative w-full sm:w-72">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400 dark:text-slate-500" />
+            <div className="relative w-full sm:w-80">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
               <Input
-                placeholder={t('search')}
+                placeholder="Cari barang reward..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9 text-xs h-9 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100"
               />
             </div>
 
-            {canManage && (
-              <div className="flex items-center space-x-2 w-full sm:w-auto">
-                <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                <select
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                  className="px-3 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                >
-                  <option value="all">{t('allStatuses')}</option>
-                  <option value="active">{t('active')}</option>
-                  <option value="inactive">{t('inactive')}</option>
-                </select>
-              </div>
-            )}
+            <div className="flex items-center space-x-2 w-full sm:w-auto">
+              <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <select
+                value={filterCategory}
+                onChange={(e) => setFilterCategory(e.target.value)}
+                className="px-3 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 rounded-lg focus:outline-hidden"
+              >
+                <option value="all">Semua Kategori</option>
+                <option value="embako">Sembako & Pangan</option>
+                <option value="peralatan">Peralatan Rumah Tangga</option>
+                <option value="voucher">Voucher Listrik</option>
+                <option value="pupuk">Pupuk Organik SCV</option>
+              </select>
+            </div>
           </div>
 
           {filteredRewards.length === 0 ? (
             <EmptyState
-              title={t('noRewardsTitle')}
-              description={canManage ? t('noRewardsDescAdmin') : t('noRewardsDescCitizen')}
+              title="Tidak Ada Reward"
+              description={canManage ? 'Belum ada barang reward yang didaftarkan. Klik tombol di bawah untuk menambah barang pertama.' : 'Katalog reward sedang kosong.'}
+              actionText={canManage ? 'Tambah Reward Baru' : null}
+              onAction={canManage ? handleOpenCreate : null}
             />
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredRewards.map((r) => (
-                <Card
-                  key={r.id}
-                  className={`border-slate-200 dark:border-slate-800 shadow-xs relative overflow-hidden transition-all ${
-                    !r.isActive ? 'opacity-60 bg-slate-50 dark:bg-slate-950' : 'bg-white dark:bg-slate-900'
-                  }`}
-                >
-                  <CardContent className="p-5 space-y-3">
-                    <div className="flex items-start justify-between">
-                      <div className="p-2.5 bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 rounded-xl">
-                        <Gift className="w-5 h-5" />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredRewards.map((r) => {
+                const requiredPts = Number(r.pointsRequired || 0);
+                const stockAmt = Number(r.stock || 0);
+                const isOutOfStock = stockAmt <= 0;
+                const isInsufficientPoints = isCitizen && userPoints < requiredPts;
+                const isDisabledRedeem = isOutOfStock || isInsufficientPoints || !r.isActive;
+
+                return (
+                  <Card
+                    key={r.rewardId || r.id}
+                    className={`border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between overflow-hidden transition-all ${
+                      !r.isActive ? 'opacity-60 bg-slate-50 dark:bg-slate-950' : 'bg-white dark:bg-slate-900'
+                    }`}
+                  >
+                    <CardContent className="p-5 space-y-4">
+                      {/* Reward Image / Icon */}
+                      <div className="h-40 w-full bg-slate-100 dark:bg-slate-950 rounded-2xl overflow-hidden flex items-center justify-center border border-slate-200 dark:border-slate-800 relative">
+                        {r.imageUrl ? (
+                          <img src={r.imageUrl} alt={r.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <Gift className="w-12 h-12 text-emerald-600 dark:text-emerald-400" />
+                        )}
+                        <Badge className="absolute top-3 right-3 bg-emerald-600 text-white font-extrabold text-xs shadow-md">
+                          {requiredPts.toLocaleString()} PTS
+                        </Badge>
                       </div>
-                      <Badge className="bg-emerald-600 text-white font-extrabold text-xs">
-                        {r.pointsRequired} pts
-                      </Badge>
-                    </div>
 
-                    <div>
-                      <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm">{r.title}</h3>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 mt-0.5">{r.description || '...'}</p>
-                    </div>
+                      <div>
+                        <div className="flex items-center justify-between gap-2">
+                          <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base">
+                            {r.name || r.title}
+                          </h3>
+                          <Badge variant="outline" className="text-[10px] uppercase font-bold text-slate-500">
+                            {r.category || 'embako'}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 mt-1">
+                          {r.description || 'Barang reward resmi Bank Sampah SCV.'}
+                        </p>
+                      </div>
 
-                    <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-100 dark:border-slate-800">
-                      <span className={`font-semibold ${r.stock > 0 ? 'text-slate-700 dark:text-slate-300' : 'text-red-600 dark:text-red-400 font-bold'}`}>
-                        {t('stockLabel')}: {r.stock} {t('items')}
-                      </span>
-                      {!r.isActive && <Badge variant="outline" className="text-[10px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800">{t('inactive')}</Badge>}
-                    </div>
+                      <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-100 dark:border-slate-800">
+                        <span className={`font-semibold ${stockAmt > 0 ? 'text-slate-700 dark:text-slate-300' : 'text-red-600 font-bold'}`}>
+                          Stok: {stockAmt} Item
+                        </span>
+                        {!r.isActive && (
+                          <Badge variant="outline" className="text-[10px] text-amber-700 bg-amber-50 border-amber-200">
+                            Non-Aktif
+                          </Badge>
+                        )}
+                      </div>
 
-                    {/* Actions based on Permissions */}
-                    <div className="pt-2">
+                      {/* Redeem Action for Citizen */}
                       {isCitizen && (
                         <Button
-                          onClick={() => handleRedeem(r)}
-                          disabled={actionLoading || r.stock <= 0 || (userProfile?.points || 0) < r.pointsRequired}
-                          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-9 gap-1.5"
+                          onClick={() => promptRedeem(r)}
+                          disabled={actionLoading || isDisabledRedeem}
+                          className={`w-full text-xs h-10 gap-1.5 font-bold ${
+                            isDisabledRedeem
+                              ? 'bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-500 cursor-not-allowed'
+                              : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
+                          }`}
                         >
                           <ShoppingBag className="w-4 h-4" />
                           <span>
-                            {r.stock <= 0
-                              ? t('outOfStock')
-                              : (userProfile?.points || 0) < r.pointsRequired
-                              ? t('insufficientPoints')
-                              : t('redeemPoints')}
+                            {isOutOfStock
+                              ? 'Stok Habis'
+                              : isInsufficientPoints
+                              ? `Poin Kurang (${userPoints}/${requiredPts})`
+                              : 'Tukarkan Poin'}
                           </span>
                         </Button>
                       )}
 
+                      {/* Manage Actions for Officer/Admin */}
                       {canManage && (
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 pt-1">
                           <Button
-                            onClick={() => handleOpenForm(r)}
+                            onClick={() => handleOpenEdit(r)}
                             variant="outline"
                             size="sm"
-                            className="flex-1 text-xs h-8 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300"
+                            className="flex-1 text-xs h-9 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300"
                           >
-                            <Edit className="w-3.5 h-3.5 mr-1" /> {t('edit')}
+                            <Edit3 className="w-3.5 h-3.5 mr-1" /> Edit
                           </Button>
                           <Button
-                            onClick={() => handleToggleStatus(r.id, r.isActive !== false)}
+                            onClick={() => handleToggleStatus(r.rewardId || r.id, r.isActive !== false)}
                             variant="outline"
                             size="sm"
-                            className="text-xs h-8 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300"
+                            className="text-xs h-9 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300"
                           >
-                            {r.isActive !== false ? t('deactivate') : t('activate')}
+                            {r.isActive !== false ? 'Matikan' : 'Aktifkan'}
                           </Button>
                           <Button
-                            onClick={() => handleDeleteReward(r.id)}
+                            onClick={() => promptDeleteReward(r.rewardId || r.id, r.name || r.title)}
                             variant="outline"
                             size="sm"
-                            className="text-xs h-8 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 border-red-200 dark:border-red-900"
-                            title={t('delete')}
+                            className="text-xs h-9 text-red-600 dark:text-red-400 border-red-200 dark:border-red-900 hover:bg-red-50"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </Button>
                         </div>
                       )}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </>
       )}
 
-      {/* ─── TAB 2: REDEMPTION HISTORY & PROCESSING ─── */}
+      {/* ─── TAB 2: REDEMPTION VOUCHERS LIST ─── */}
       {activeTab === 'redemptions' && (
         <SectionCard
-          title={canManage ? t('redemptionQueueTitle') : t('redemptionHistoryTitle')}
-          description={canManage ? t('redemptionQueueDesc') : t('redemptionHistoryDesc')}
+          title={isCitizen ? 'Voucher Penukaran Saya' : 'Daftar Semua Voucher Penukaran'}
+          description="Voucher penukaran yang dibuat warga. Tunjukkan Voucher QR Code kepada petugas untuk verifikasi."
         >
           {redemptions.length === 0 ? (
-            <EmptyState title={t('noRedemptionsTitle')} description={t('noRedemptionsDesc')} />
+            <EmptyState title="Belum Ada Voucher" description="Riwayat permohonan penukaran reward akan muncul di sini." />
           ) : (
             <div className="space-y-3 pt-3">
               {redemptions.map((red) => (
                 <div
-                  key={red.id}
-                  className="p-4 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3"
+                  key={red.redemptionId || red.id}
+                  className="p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3"
                 >
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-slate-900 dark:text-slate-100 text-sm">{red.rewardTitle}</span>
-                      <RedemptionStatusBadge status={red.status} t={t} />
+                      <span className="font-bold text-slate-900 dark:text-slate-100 text-sm">
+                        {red.rewardName || red.rewardTitle}
+                      </span>
+                      <StatusBadge status={red.status} />
                     </div>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {t('applicant')}: <span className="font-semibold text-slate-800 dark:text-slate-200">{red.userName}</span> • {red.pointsUsed} pts
+                      Pemohon: <span className="font-bold text-slate-800 dark:text-slate-200">{red.userName}</span> ({red.userMemberId || 'N/A'}) •{' '}
+                      <span className="font-mono text-emerald-600 font-extrabold">{red.pointsRequired || red.pointsUsed} Pts</span>
                     </p>
-                    <p className="text-[11px] text-slate-400 dark:text-slate-500 font-mono">ID: {red.id}</p>
+                    <p className="text-[11px] text-slate-400 font-mono">
+                      Redemption ID: <strong className="text-slate-700 dark:text-slate-300">{red.redemptionId || red.id}</strong>
+                    </p>
                   </div>
 
-                  {/* Actions for Authorized Roles */}
-                  {canManage && (
-                    <div className="flex items-center gap-2">
-                      {red.status === 'requested' && (
-                        <>
-                          <Button
-                            onClick={() => handleUpdateRedemptionStatus(red.id, 'approved')}
-                            disabled={actionLoading}
-                            size="sm"
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-8 gap-1"
-                          >
-                            <Check className="w-3.5 h-3.5" /> {t('approve')}
-                          </Button>
-                          <Button
-                            onClick={() => handleUpdateRedemptionStatus(red.id, 'rejected')}
-                            disabled={actionLoading}
-                            variant="outline"
-                            size="sm"
-                            className="text-xs h-8 text-red-600 dark:text-red-400 border-red-200 dark:border-red-900 hover:bg-red-50 dark:hover:bg-red-950/40 gap-1"
-                          >
-                            <XCircle className="w-3.5 h-3.5" /> {t('reject')}
-                          </Button>
-                        </>
-                      )}
-
-                      {red.status === 'approved' && (
-                        <Button
-                          onClick={() => handleUpdateRedemptionStatus(red.id, 'collected')}
-                          disabled={actionLoading}
-                          className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-8 gap-1"
-                        >
-                          <Package className="w-3.5 h-3.5" /> {t('markCollected')}
-                        </Button>
-                      )}
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2">
+                    <Button
+                      onClick={() => {
+                        setSelectedRedemption(red);
+                        setTicketModalOpen(true);
+                      }}
+                      variant="outline"
+                      size="sm"
+                      className="text-xs h-9 gap-1.5 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300"
+                    >
+                      <Ticket className="w-4 h-4 text-emerald-600" />
+                      <span>Lihat Voucher QR</span>
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
           )}
         </SectionCard>
       )}
+
+      {/* Dialog Modals */}
+      <RewardFormModal
+        isOpen={isFormOpen}
+        onClose={() => setIsFormOpen(false)}
+        onSubmit={handleFormSubmit}
+        initialData={editingReward}
+        isSubmitting={actionLoading}
+      />
+
+      <RedemptionTicketModal
+        isOpen={ticketModalOpen}
+        onClose={() => setTicketModalOpen(false)}
+        redemption={selectedRedemption}
+      />
+
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmDialog.onConfirm}
+        title={confirmDialog.title}
+        description={confirmDialog.description}
+        confirmText={confirmDialog.confirmText}
+        variant={confirmDialog.variant}
+        isLoading={actionLoading}
+      />
     </div>
   );
 };
 
-const RedemptionStatusBadge = ({ status, t }) => {
+const StatusBadge = ({ status }) => {
   switch (status) {
+    case 'completed':
     case 'approved':
-      return <Badge className="bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 text-[10px]">{t ? t('approved') : 'Approved'}</Badge>;
     case 'collected':
-      return <Badge className="bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-800 text-[10px]">Collected</Badge>;
+      return (
+        <Badge variant="success" className="gap-1 text-[10px]">
+          <CheckCircle2 className="w-3 h-3" />
+          <span>Selesai</span>
+        </Badge>
+      );
     case 'rejected':
-      return <Badge className="bg-red-100 dark:bg-red-950 text-red-800 dark:text-red-300 border-red-200 dark:border-red-800 text-[10px]">{t ? t('rejected') : 'Rejected'}</Badge>;
-    case 'requested':
+      return (
+        <Badge variant="destructive" className="gap-1 text-[10px]">
+          <XCircle className="w-3 h-3" />
+          <span>Ditolak</span>
+        </Badge>
+      );
+    case 'pending':
     default:
-      return <Badge className="bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800 text-[10px]">{t ? t('pending') : 'Pending'}</Badge>;
+      return (
+        <Badge variant="warning" className="gap-1 text-[10px]">
+          <Clock className="w-3 h-3 animate-spin" />
+          <span>Pending</span>
+        </Badge>
+      );
   }
 };
