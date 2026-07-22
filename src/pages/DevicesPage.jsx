@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { useClientSettings } from '@/context/ClientSettingsContext';
 import {
   DeviceHeader,
   DeviceFilters,
@@ -17,7 +18,8 @@ import { Badge } from '@/components/ui/badge';
 import { Eye, ChevronLeft, ChevronRight, CheckCircle2, AlertCircle } from 'lucide-react';
 
 export const DevicesPage = () => {
-  const { role } = useAuth();
+  const { role, userProfile } = useAuth();
+  const { playChime } = useClientSettings();
   const canManage = role === 'admin';
   const isGovernment = role === 'government';
 
@@ -58,6 +60,7 @@ export const DevicesPage = () => {
     updateDevice,
     toggleActive,
     regenerateApiKey,
+    pingDevice,
     deleteDevice,
   } = useDevices();
 
@@ -79,6 +82,16 @@ export const DevicesPage = () => {
   const handleOpenDetail = (device) => {
     setSelectedDevice(device);
     setDetailModalOpen(true);
+  };
+
+  const handlePingDevice = async (device) => {
+    try {
+      playChime();
+      await pingDevice(device.deviceId, userProfile?.fullName || 'Admin');
+      showToast(`🔔 Sinyal Ping dikirim ke "${device.name}" (${device.deviceId})! Buzzer/LED ESP32 akan berbunyi.`);
+    } catch (err) {
+      showToast(err.message || 'Gagal mengirim sinyal ping.', 'error');
+    }
   };
 
   const handleFormSubmit = async (formData) => {
@@ -224,6 +237,7 @@ export const DevicesPage = () => {
               onEdit={handleOpenEdit}
               onRegenerateKey={promptRegenerateKey}
               onToggleActive={handleToggleActive}
+              onPing={handlePingDevice}
               onDelete={promptDeleteDevice}
             />
           ))}
@@ -236,6 +250,7 @@ export const DevicesPage = () => {
           onEdit={handleOpenEdit}
           onRegenerateKey={promptRegenerateKey}
           onToggleActive={handleToggleActive}
+          onPing={handlePingDevice}
           onDelete={promptDeleteDevice}
         />
       )}
@@ -285,6 +300,7 @@ export const DevicesPage = () => {
         isOpen={detailModalOpen}
         onClose={() => setDetailModalOpen(false)}
         device={selectedDevice}
+        onPing={handlePingDevice}
       />
 
       <ConfirmDialog

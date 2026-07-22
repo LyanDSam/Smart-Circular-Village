@@ -84,6 +84,10 @@ export const useDevices = () => {
     return newKey;
   };
 
+  const pingDevice = async (deviceId, userName) => {
+    return await deviceService.pingDevice(deviceId, userName);
+  };
+
   const deleteDevice = async (deviceId) => {
     await deviceService.deleteDevice(deviceId);
     await fetchDevices();
@@ -110,6 +114,7 @@ export const useDevices = () => {
     updateDevice,
     toggleActive,
     regenerateApiKey,
+    pingDevice,
     deleteDevice,
   };
 };

@@ -17,6 +17,8 @@ import {
   Power,
   Trash2,
   ExternalLink,
+  Activity,
+  Bell,
 } from 'lucide-react';
 
 export const DeviceCard = ({
@@ -26,6 +28,7 @@ export const DeviceCard = ({
   onEdit,
   onRegenerateKey,
   onToggleActive,
+  onPing,
   onDelete,
 }) => {
   const [showApiKey, setShowApiKey] = useState(false);
@@ -74,7 +77,7 @@ export const DeviceCard = ({
             </div>
             <div className="min-w-0">
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 block">
-                {isCompost ? 'Smart Compost Bin' : 'Smart Collection Station'}
+                {isCompost ? 'Smart Compost Bin' : 'Smart Collection Station '}
               </span>
               <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 truncate">
                 {device.name}
@@ -143,10 +146,23 @@ export const DeviceCard = ({
           variant="outline"
           size="sm"
           onClick={() => onViewDetail(device)}
-          className="w-full text-xs font-semibold h-8 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+          className="flex-1 text-xs font-semibold h-8 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
         >
-          <ExternalLink className="w-3.5 h-3.5 mr-1.5" /> Detail Perangkat
+          <ExternalLink className="w-3.5 h-3.5 mr-1" /> Detail
         </Button>
+
+        {canManage && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onPing && onPing(device)}
+            className="text-xs font-bold h-8 border-amber-200 dark:border-amber-900/60 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 gap-1"
+            title="Kirim Sinyal Ping (Bunyikan Buzzer Hardware)"
+          >
+            <Bell className="w-3.5 h-3.5" />
+            <span>Ping</span>
+          </Button>
+        )}
 
         {canManage && (
           <div className="relative">

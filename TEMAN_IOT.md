@@ -4,6 +4,19 @@ Dokumen ini khusus dibuat untuk **Tim / Developer Hardware & IoT ESP32** agar fi
 
 ---
 
+## 📢 UPDATE TERBARU FIRMWARE & HARDWARE (Catatan Pembaruan Sistem)
+
+> **[PENTING] Pembaruan Integrasi Teranyar di Website Dashboard SCV:**
+> 1. **Penamaan Tipe Perangkat Resmi**:
+>    * **Smart Collection Station ** — Prefix Device ID: `SCV-COLL-xxx`
+>    * **Smart Compost Bin** — Prefix Device ID: `SCV-COMP-xxx`
+> 2. **Auto-Generate Device ID**: ID Perangkat kini secara otomatis digenerate berurutan (`SCV-COLL-001`, `SCV-COLL-002`, dst) saat didaftarkan di website.
+> 3. **Fitur Sinyal Ping & Buzzer Hardware (`devices/{deviceId}/commands/ping`)**:
+>    * Tombol **`[ 🔔 Ping ]`** di website kini akan menulis perintah ke node Realtime Database `devices/{deviceId}/commands/ping`.
+>    * ESP32 disarankan mengecek node ini pada `loop()` untuk membunyikan **Buzzer / LED fisik** selama 3 detik.
+
+---
+
 ## 📌 1. Kredensial & Parameter Perangkat (PENTING)
 
 Gunakan parameter otentikasi berikut saat mengirim request dari ESP32:
@@ -27,24 +40,24 @@ Gunakan parameter otentikasi berikut saat mengirim request dari ESP32:
 
 ---
 
-## ⚡ 3. Dua Tugas Utama Firmware ESP32
+## ⚡ 3. Tiga Tugas Utama Firmware ESP32
 
-Firmware ESP32 Pos Timbangan sampah hanya perlu menjalankan **2 Alur Utama**:
+Firmware ESP32 Pos Timbangan sampah menjalankan **3 Alur Utama**:
 
 ```
- ┌────────────────────────────────────────────────────────┐
- │                      ESP32 LOOP                        │
- └───────────┬────────────────────────────────┬───────────┘
-             │                                │
-             ▼ (Setiap 15-30 Detik)           ▼ (Saat Ada Tap RFID + Timbangan Stabil)
-   [1. Kirim Heartbeat]             [2. Kirim Transaksi Penimbangan]
-             │                                │
-             ▼                                ▼
-  `POST /heartbeat`                `POST /pending-transaction`
-             │                                │
-             ▼                                ▼
-   Website Status berubah ke        Popup Transaksi Konfirmasi muncul
-   🟢 ONLINE / TERHUBUNG            otomatis di layar Admin/Petugas!
+ ┌───────────────────────────────────────────────────────────────────┐
+ │                            ESP32 LOOP                             │
+ └──────┬──────────────────────────┬──────────────────────────┬──────┘
+        │                          │                          │
+        ▼ (Setiap 15-30 Detik)     ▼ (Tap RFID + Timbangan)   ▼ (RTDB Listener)
+  [1. Kirim Heartbeat]       [2. Kirim Transaksi]       [3. Ping Buzzer]
+             │                                │                       │
+             ▼                                ▼                       ▼
+  `POST /heartbeat`                `POST /pending-transaction`   RTDB Active Ping = True
+             │                                │                       │
+             ▼                                ▼                       ▼
+   Website Status berubah ke        Popup Transaksi Konfirmasi      Buzzer Hardware ESP32
+   🟢 ONLINE / TERHUBUNG            muncul di layar Petugas!        Berbunyi Selama 3 Detik!
 ```
 
 ---
@@ -89,7 +102,46 @@ Firmware ESP32 Pos Timbangan sampah hanya perlu menjalankan **2 Alur Utama**:
 
 ---
 
-## 💻 5. Contoh Kode C++ / Arduino ESP32 Siap Pakai
+## 🔔 5. Fitur Sinyal Ping & Listener Buzzer Hardware
+
+Saat Admin / Officer mengklik tombol **`[ 🔔 Ping ]`** di Website Dashboard SCV, Realtime Database menuliskan perintah ke node:
+`devices/{deviceId}/commands/ping`
+
+### Struktur Data RTDB (`devices/SCV-COLL-001/commands/ping`):
+```json
+{
+  "active": true,
+  "durationSeconds": 3,
+  "requestedBy": "Admin Khanda",
+  "timestamp": 1784705168
+}
+```
+
+### Contoh Potongan Kode Arduino C++ (ESP32 Buzzer Listener):
+```cpp
+const int BUZZER_PIN = 12; // Pin Buzzer / LED indikator
+
+// Dipanggil di void loop() untuk mendeteksi sinyal Ping dari Website
+void checkPingCommand() {
+  if (Firebase.ready() && Firebase.RTDB.getBool(&fbdo, "devices/SCV-COLL-001/commands/ping/active")) {
+    if (fbdo.boolData() == true) {
+      Serial.println("🔔 Sinyal Ping Diterima dari Website! Bunyikan Buzzer...");
+      
+      // Bunyikan Buzzer / Nyalakan LED selama 3 detik
+      digitalWrite(BUZZER_PIN, HIGH);
+      delay(3000);
+      digitalWrite(BUZZER_PIN, LOW);
+
+      // Reset status ping active menjadi false kembali di RTDB
+      Firebase.RTDB.setBool(&fbdo, "devices/SCV-COLL-001/commands/ping/active", false);
+    }
+  }
+}
+```
+
+---
+
+## 💻 6. Contoh Kode C++ / Arduino ESP32 Siap Pakai (Lengkap)
 
 Berikut adalah potongan kode C++ (Arduino IDE) lengkap yang siap digunakan pada ESP32:
 
@@ -201,11 +253,13 @@ void loop() {
 
 ---
 
-## 🧪 6. Cara Pengujian (Testing)
+## 🧪 7. Cara Pengujian (Testing)
 
 1. Jalankan ESP32 dan amati Serial Monitor.
 2. Buka Halaman Perangkat (`/devices`) di Website SCV:
    * Status perangkat **`SCV-COLL-001`** akan berubah menjadi **🟢 Online** dalam kurun waktu 20 detik setelah ESP32 mengirim `sendHeartbeat()`.
-3. Tempelkan kartu RFID pada pembaca RFID ESP32:
-   * ESP32 akan memanggil `sendPendingTransaction("01020304", 4520)`.
+3. Uji Sinyal Ping Buzzer:
+   * Klik tombol **`[ 🔔 Ping ]`** pada kartu atau tabel perangkat di website. Sinyal ping dikirim ke RTDB dan Buzzer fisik pada ESP32 akan berbunyi selama 3 detik.
+4. Tempelkan kartu RFID pada pembaca RFID ESP32:
+   * ESP32 memanggil `sendPendingTransaction("01020304", 4520)`.
    * **Popup Modal Konfirmasi Setoran** akan langsung terbuka secara otomatis di layar Laptop/Tablet Petugas!

@@ -8,7 +8,7 @@ Project: Smart Circular Village (SCV)
 
 ## 1. Overview
 
-Document ini berisi spesifikasi teknis lengkap dari REST API Cloud Functions dan Firebase Realtime Database (RTDB) yang dipanggil oleh firmware ESP32 untuk **Smart Collection Station** (Timbangan Sampah RFID) dan **Smart Compost Bin**.
+Document ini berisi spesifikasi teknis lengkap dari REST API Cloud Functions dan Firebase Realtime Database (RTDB) yang dipanggil oleh firmware ESP32 untuk **Smart Collection Station**  dan **Smart Compost Bin**.
 
 ---
 

@@ -1,10 +1,11 @@
-import React from 'react';
-import { useForm } from 'react-hook-form';
+import React, { useEffect, useState } from 'react';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { deviceSchema } from '../schemas/deviceSchema';
+import { deviceService } from '@/services/deviceService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { X, Cpu, Loader2, Save } from 'lucide-react';
+import { X, Cpu, Loader2, Save, RefreshCw, Sparkles } from 'lucide-react';
 
 export const DeviceForm = ({
   isOpen = false,
@@ -14,10 +15,14 @@ export const DeviceForm = ({
   isSubmitting = false,
 }) => {
   const isEdit = Boolean(initialData?.deviceId);
+  const [generatingId, setGeneratingId] = useState(false);
 
   const {
     register,
     handleSubmit,
+    setValue,
+    control,
+    reset,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(deviceSchema),
@@ -25,7 +30,7 @@ export const DeviceForm = ({
       ? {
           deviceId: initialData.deviceId,
           name: initialData.name,
-          deviceType: initialData.deviceType || initialData.type || 'compost',
+          deviceType: initialData.deviceType || initialData.type || 'collection_station',
           firmwareVersion: initialData.firmwareVersion || '1.0.0',
           location: {
             village: initialData.location?.village || 'Desa Circular Utama',
@@ -36,9 +41,9 @@ export const DeviceForm = ({
           isActive: initialData.isActive ?? true,
         }
       : {
-          deviceId: 'SCV-COMP-001',
+          deviceId: 'SCV-COLL-001',
           name: '',
-          deviceType: 'compost',
+          deviceType: 'collection_station',
           firmwareVersion: '1.0.0',
           location: {
             village: 'Desa Circular Utama',
@@ -49,6 +54,28 @@ export const DeviceForm = ({
           isActive: true,
         },
   });
+
+  const selectedType = useWatch({ control, name: 'deviceType' }) || 'collection_station';
+
+  // Auto-generate Device ID when opening modal or changing device type
+  const autoGenerateId = async (typeToUse) => {
+    if (isEdit) return;
+    setGeneratingId(true);
+    try {
+      const nextId = await deviceService.generateNextDeviceId(typeToUse || selectedType);
+      setValue('deviceId', nextId);
+    } catch (err) {
+      console.error('Error generating device ID:', err);
+    } finally {
+      setGeneratingId(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen && !isEdit) {
+      autoGenerateId(selectedType);
+    }
+  }, [isOpen, selectedType, isEdit]);
 
   if (!isOpen) return null;
 
@@ -73,41 +100,6 @@ export const DeviceForm = ({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
-          {/* Device ID */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Device ID <span className="text-rose-500">*</span>
-            </label>
-            <Input
-              {...register('deviceId')}
-              disabled={isEdit}
-              placeholder="Format: SCV-COMP-001 atau SCV-COLL-001"
-              className="text-xs font-mono font-semibold uppercase bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800"
-            />
-            {errors.deviceId ? (
-              <p className="text-[11px] text-rose-500 mt-1">{errors.deviceId.message}</p>
-            ) : (
-              <p className="text-[10px] text-slate-400 mt-1">
-                Gunakan `SCV-COLL-xxx` untuk Station atau `SCV-COMP-xxx` untuk Compost Bin.
-              </p>
-            )}
-          </div>
-
-          {/* Device Name */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Nama Perangkat <span className="text-rose-500">*</span>
-            </label>
-            <Input
-              {...register('name')}
-              placeholder="Contoh: Smart Compost Bin #01 RW 03"
-              className="text-xs bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800"
-            />
-            {errors.name && (
-              <p className="text-[11px] text-rose-500 mt-1">{errors.name.message}</p>
-            )}
-          </div>
-
           {/* Device Type & Firmware */}
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -118,8 +110,8 @@ export const DeviceForm = ({
                 {...register('deviceType')}
                 className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-700 dark:text-slate-300 font-medium focus:outline-none focus:ring-1 focus:ring-emerald-500"
               >
+                <option value="collection_station">Smart Collection Station </option>
                 <option value="compost">Smart Compost Bin</option>
-                <option value="collection_station">Smart Collection Station</option>
               </select>
               {errors.deviceType && (
                 <p className="text-[11px] text-rose-500 mt-1">{errors.deviceType.message}</p>
@@ -139,6 +131,64 @@ export const DeviceForm = ({
                 <p className="text-[11px] text-rose-500 mt-1">{errors.firmwareVersion.message}</p>
               )}
             </div>
+          </div>
+
+          {/* Device ID (Auto-Generated) */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Device ID (Otomatis) <span className="text-rose-500">*</span>
+              </label>
+              {!isEdit && (
+                <button
+                  type="button"
+                  onClick={() => autoGenerateId(selectedType)}
+                  disabled={generatingId}
+                  className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 hover:underline disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3 h-3 ${generatingId ? 'animate-spin' : ''}`} />
+                  <span>Generate Ulang</span>
+                </button>
+              )}
+            </div>
+            <div className="relative">
+              <Input
+                {...register('deviceId')}
+                readOnly
+                placeholder="Membuat Device ID otomatis..."
+                className="text-xs font-mono font-bold uppercase bg-slate-100 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100"
+              />
+              <span className="absolute right-3 top-2.5 text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 flex items-center gap-1">
+                <Sparkles className="w-3 h-3" />
+                <span>Auto-Generated</span>
+              </span>
+            </div>
+            {errors.deviceId ? (
+              <p className="text-[11px] text-rose-500 mt-1">{errors.deviceId.message}</p>
+            ) : (
+              <p className="text-[10px] text-slate-400 mt-1">
+                Device ID digenerate otomatis secara berurutan sesuai tipe perangkat.
+              </p>
+            )}
+          </div>
+
+          {/* Device Name */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              Nama Perangkat <span className="text-rose-500">*</span>
+            </label>
+            <Input
+              {...register('name')}
+              placeholder={
+                selectedType === 'collection_station'
+                  ? 'Contoh: Timbangan Sampah RFID Station 01'
+                  : 'Contoh: Smart Compost Bin #01 RW 03'
+              }
+              className="text-xs bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800"
+            />
+            {errors.name && (
+              <p className="text-[11px] text-rose-500 mt-1">{errors.name.message}</p>
+            )}
           </div>
 
           {/* Location Details */}
@@ -190,7 +240,7 @@ export const DeviceForm = ({
             </Button>
             <Button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || generatingId}
               className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs gap-1.5"
             >
               {isSubmitting ? (

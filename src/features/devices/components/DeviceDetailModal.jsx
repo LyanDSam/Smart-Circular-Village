@@ -13,9 +13,10 @@ import {
   Eye,
   EyeOff,
   Radio,
+  Bell,
 } from 'lucide-react';
 
-export const DeviceDetailModal = ({ isOpen = false, onClose, device = null }) => {
+export const DeviceDetailModal = ({ isOpen = false, onClose, device = null, onPing }) => {
   const [showApiKey, setShowApiKey] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -79,7 +80,7 @@ export const DeviceDetailModal = ({ isOpen = false, onClose, device = null }) =>
             <div className="p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
               <span className="text-slate-400 block mb-0.5">Tipe Perangkat</span>
               <span className="font-bold text-slate-800 dark:text-slate-200">
-                {isCompost ? 'Smart Compost Bin' : 'Collection Station'}
+                {isCompost ? 'Smart Compost Bin' : 'Smart Collection Station '}
               </span>
             </div>
             <div className="p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
@@ -208,7 +209,17 @@ export const DeviceDetailModal = ({ isOpen = false, onClose, device = null }) =>
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 flex justify-end">
+        <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 flex items-center justify-between">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onPing && onPing(device)}
+            className="text-xs font-bold h-9 border-amber-200 dark:border-amber-900/60 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 gap-1.5"
+          >
+            <Bell className="w-4 h-4" />
+            <span>Ping Hardware (Buzzer)</span>
+          </Button>
+
           <Button
             variant="default"
             size="sm"

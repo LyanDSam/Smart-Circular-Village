@@ -10,6 +10,7 @@ import {
   Power,
   Trash2,
   ExternalLink,
+  Bell,
 } from 'lucide-react';
 
 export const DeviceTable = ({
@@ -19,6 +20,7 @@ export const DeviceTable = ({
   onEdit,
   onRegenerateKey,
   onToggleActive,
+  onPing,
   onDelete,
 }) => {
   return (
@@ -66,7 +68,7 @@ export const DeviceTable = ({
                   {/* Type */}
                   <td className="py-3.5 px-4 font-medium">
                     <span className="capitalize text-slate-600 dark:text-slate-400">
-                      {isCompost ? 'Smart Compost Bin' : 'Collection Station'}
+                      {isCompost ? 'Smart Compost Bin' : 'Smart Collection Station '}
                     </span>
                   </td>
 
@@ -103,6 +105,15 @@ export const DeviceTable = ({
 
                       {canManage && (
                         <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onPing && onPing(device)}
+                            className="h-8 px-2 text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950/40"
+                            title="Ping Device (Bunyikan Buzzer)"
+                          >
+                            <Bell className="w-3.5 h-3.5" />
+                          </Button>
                           <Button
                             variant="ghost"
                             size="sm"

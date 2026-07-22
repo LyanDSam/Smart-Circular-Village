@@ -51,6 +51,35 @@ export const computeDeviceStatus = (device, lastSeenMs = null) => {
 
 export const deviceService = {
   /**
+   * Automatically generate next sequential Device ID based on type.
+   * e.g., SCV-COLL-001, SCV-COLL-002 or SCV-COMP-001, SCV-COMP-002
+   */
+  async generateNextDeviceId(deviceType = 'collection_station') {
+    const prefix = deviceType === 'collection_station' ? 'SCV-COLL' : 'SCV-COMP';
+    try {
+      const devicesRef = collection(db, 'devices');
+      const snap = await getDocs(devicesRef);
+      let maxNum = 0;
+      if (!snap.empty) {
+        snap.docs.forEach((d) => {
+          const id = d.id;
+          if (id.startsWith(prefix)) {
+            const parts = id.split('-');
+            const num = parseInt(parts[parts.length - 1], 10);
+            if (!isNaN(num) && num > maxNum) {
+              maxNum = num;
+            }
+          }
+        });
+      }
+      const nextNum = String(maxNum + 1).padStart(3, '0');
+      return `${prefix}-${nextNum}`;
+    } catch (err) {
+      const randomNum = String(Math.floor(Math.random() * 899) + 100);
+      return `${prefix}-${randomNum}`;
+    }
+  },
+  /**
    * Fetch devices metadata directly from Cloud Firestore & enrich with computed status from RTDB heartbeat.
    * STRICTLY NO DUMMY FALLBACK DATA.
    */
@@ -275,6 +304,25 @@ export const deviceService = {
     });
 
     return newApiKey;
+  },
+
+  /**
+   * Send Ping signal to physical ESP32 device via RTDB node `devices/{deviceId}/commands/ping`.
+   * Triggers physical buzzer / locator LED on hardware.
+   */
+  async pingDevice(deviceId, userName = 'Admin') {
+    if (!deviceId) throw new Error('Device ID tidak valid.');
+
+    const pingRef = ref(rtdb, `devices/${deviceId}/commands/ping`);
+    const payload = {
+      active: true,
+      timestamp: Math.floor(Date.now() / 1000),
+      requestedBy: userName,
+      durationSeconds: 3,
+    };
+
+    await set(pingRef, payload);
+    return payload;
   },
 
   /**
