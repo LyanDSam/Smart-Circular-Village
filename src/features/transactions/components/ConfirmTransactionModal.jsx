@@ -98,10 +98,10 @@ export const ConfirmTransactionModal = ({
   const deviceNameText = device?.name || device?.deviceName || 'IoT Collection Station';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto">
       {/* Header */}
-      <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden font-sans">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40">
+      <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden font-sans flex flex-col max-h-[90vh] my-auto">
+        <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 shrink-0">
           <div className="flex items-center space-x-2 text-slate-900 dark:text-slate-100">
             <Scale className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
             <h3 className="font-bold text-base">Konfirmasi Transaksi Sampah</h3>
@@ -115,13 +115,13 @@ export const ConfirmTransactionModal = ({
         </div>
 
         {/* Content Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
-          {/* Section 1: Device Information Card (📍 Device Information) */}
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 flex-1 min-h-0 overflow-y-auto">
+          {/* Section 1: Device Information Card (Device Information) */}
           <div className="p-4 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2 text-xs">
             <div className="flex items-center justify-between">
               <span className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                 <MapPin className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                📍 Device Information
+                Device Information
               </span>
               {device ? (
                 <DeviceStatusBadge status={device.status} />

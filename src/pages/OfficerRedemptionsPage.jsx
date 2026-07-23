@@ -115,7 +115,7 @@ export const OfficerRedemptionsPage = () => {
   };
 
   // Called after photo is snapped by Officer
-  const handlePhotoCaptured = async (proofImageUrl) => {
+  const handlePhotoCaptured = async (proofImageUrl, postName = '') => {
     if (!targetForPhoto) return;
     const redemption = targetForPhoto;
     const redId = redemption.redemptionId || redemption.id;
@@ -127,12 +127,24 @@ export const OfficerRedemptionsPage = () => {
         userProfile?.uid || user?.uid || 'officer',
         officerPublicName,
         proofImageUrl,
+        postName || userProfile?.postName || 'Posko SCV Utama',
         isAnonymousMode,
         officerRealName
       );
-      showToast(`Foto bukti tersimpan. Sinyal konfirmasi dikirim ke layar warga ${redemption.userName}.`);
+      showToast(`Foto bukti & lokasi posko tersimpan. Sinyal konfirmasi dikirim ke layar warga ${redemption.userName}.`);
       setProofPhotoModalOpen(false);
       setTargetForPhoto(null);
+      
+      // Auto-open ticket modal for Officer to show Handshake confirmation popup
+      setSelectedRedemption({
+        ...redemption,
+        status: 'awaiting_confirmation',
+        proofImageUrl,
+        postName: postName || userProfile?.postName || 'Posko SCV Utama',
+        officerConfirmed: false,
+        citizenConfirmed: false,
+      });
+      setTicketModalOpen(true);
       fetchRedemptionsData();
     } catch (err) {
       showToast(err.message || 'Gagal menyimpan foto bukti.', 'error');
@@ -416,7 +428,7 @@ export const OfficerRedemptionsPage = () => {
               >
                 <CardContent className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div className="space-y-1.5 flex-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-extrabold text-base text-slate-900 dark:text-slate-100">
                         {red.rewardName}
                       </span>
@@ -512,7 +524,7 @@ export const OfficerRedemptionsPage = () => {
                   </div>
 
                   {/* Interactive Action Buttons */}
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
                     <Button
                       onClick={() => {
                         setSelectedRedemption(red);
@@ -602,12 +614,15 @@ export const OfficerRedemptionsPage = () => {
         onCapture={handlePhotoCaptured}
         rewardName={targetForPhoto?.rewardName}
         citizenName={targetForPhoto?.userName}
+        officerPostId={userProfile?.postId}
+        defaultPostName={userProfile?.postName || 'Posko SCV Utama'}
       />
 
       <RedemptionTicketModal
         isOpen={ticketModalOpen}
         onClose={() => setTicketModalOpen(false)}
         redemption={selectedRedemption}
+        isOfficerMode={true}
       />
 
       <ConfirmDialog

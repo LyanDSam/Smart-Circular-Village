@@ -42,6 +42,10 @@ export const RewardsPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState('all');
 
+  // Redemption Search & Status Filter state
+  const [redemptionSearch, setRedemptionSearch] = useState('');
+  const [redemptionStatusFilter, setRedemptionStatusFilter] = useState('all'); // 'all' | 'pending' | 'completed' | 'rejected'
+
   // Modals & Feedback
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingReward, setEditingReward] = useState(null);
@@ -74,14 +78,6 @@ export const RewardsPage = () => {
     try {
       const rewardList = await rewardService.getRewards({ activeOnly: !canManage });
       setRewards(rewardList);
-
-      if (isCitizen) {
-        const citizenReds = await rewardService.getCitizenRedemptions(userProfile?.uid || user?.uid);
-        setRedemptions(citizenReds);
-      } else {
-        const allReds = await rewardService.getAllRedemptions();
-        setRedemptions(allReds);
-      }
     } catch (err) {
       console.error('Error fetching rewards data:', err);
     } finally {
@@ -92,6 +88,25 @@ export const RewardsPage = () => {
   useEffect(() => {
     fetchData();
   }, [role, userProfile?.uid]);
+
+  // Real-time listener for Redemptions List
+  useEffect(() => {
+    const uid = userProfile?.uid || user?.uid;
+    if (!uid) return;
+
+    let unsub = () => {};
+    if (isCitizen) {
+      unsub = rewardService.listenToCitizenRedemptions(uid, (list) => {
+        setRedemptions(list);
+      });
+    } else {
+      unsub = rewardService.listenToAllRedemptions((list) => {
+        setRedemptions(list);
+      });
+    }
+
+    return () => unsub();
+  }, [isCitizen, userProfile?.uid, user?.uid]);
 
   // Handle Create/Update Reward Form Submit
   const handleFormSubmit = async (formData) => {
@@ -203,6 +218,48 @@ export const RewardsPage = () => {
     const catMatch = filterCategory === 'all' || (r.category || 'embako').toLowerCase() === filterCategory.toLowerCase();
     return (titleMatch || descMatch) && catMatch;
   });
+
+  // Sort and Filter Redemptions: Pending always at top, sorted by time descending
+  const filteredAndSortedRedemptions = redemptions
+    .filter((red) => {
+      const redId = (red.redemptionId || red.id || '').toLowerCase();
+      const rewardName = (red.rewardName || red.rewardTitle || '').toLowerCase();
+      const userName = (red.userName || '').toLowerCase();
+      const query = redemptionSearch.toLowerCase().trim();
+
+      const matchesSearch = !query || redId.includes(query) || rewardName.includes(query) || userName.includes(query);
+
+      const st = (red.status || '').toLowerCase();
+      let matchesStatus = true;
+      if (redemptionStatusFilter === 'pending') {
+        matchesStatus = st === 'pending' || st === 'awaiting_confirmation' || st === 'citizen_confirmed';
+      } else if (redemptionStatusFilter === 'completed') {
+        matchesStatus = st === 'completed' || st === 'approved' || st === 'collected';
+      } else if (redemptionStatusFilter === 'rejected') {
+        matchesStatus = st === 'rejected';
+      }
+
+      return matchesSearch && matchesStatus;
+    })
+    .sort((a, b) => {
+      const isPendingA = ['pending', 'awaiting_confirmation', 'citizen_confirmed'].includes((a.status || '').toLowerCase());
+      const isPendingB = ['pending', 'awaiting_confirmation', 'citizen_confirmed'].includes((b.status || '').toLowerCase());
+
+      // Pending items ALWAYS go to the top
+      if (isPendingA && !isPendingB) return -1;
+      if (!isPendingA && isPendingB) return 1;
+
+      // Within same priority, sort by time descending (newest first)
+      const getTime = (item) => {
+        if (item.createdAt?.seconds) return item.createdAt.seconds * 1000;
+        if (item.createdAt?.toDate) return item.createdAt.toDate().getTime();
+        if (typeof item.createdAt === 'number') return item.createdAt;
+        if (typeof item.createdAt === 'string') return new Date(item.createdAt).getTime();
+        return 0;
+      };
+
+      return getTime(b) - getTime(a);
+    });
 
   if (loading) {
     return <LoadingState message="Memuat katalog reward..." />;
@@ -444,47 +501,118 @@ export const RewardsPage = () => {
           title={isCitizen ? 'Voucher Penukaran Saya' : 'Daftar Semua Voucher Penukaran'}
           description="Voucher penukaran yang dibuat warga. Tunjukkan Voucher QR Code kepada petugas untuk verifikasi."
         >
-          {redemptions.length === 0 ? (
-            <EmptyState title="Belum Ada Voucher" description="Riwayat permohonan penukaran reward akan muncul di sini." />
-          ) : (
-            <div className="space-y-3 pt-3">
-              {redemptions.map((red) => (
-                <div
-                  key={red.redemptionId || red.id}
-                  className="p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3"
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-slate-900 dark:text-slate-100 text-sm">
-                        {red.rewardName || red.rewardTitle}
-                      </span>
-                      <StatusBadge status={red.status} />
-                    </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Pemohon: <span className="font-bold text-slate-800 dark:text-slate-200">{red.userName}</span> ({red.userMemberId || 'N/A'}) •{' '}
-                      <span className="font-mono text-emerald-600 font-extrabold">{red.pointsRequired || red.pointsUsed} Pts</span>
-                    </p>
-                    <p className="text-[11px] text-slate-400 font-mono">
-                      Redemption ID: <strong className="text-slate-700 dark:text-slate-300">{red.redemptionId || red.id}</strong>
-                    </p>
-                  </div>
+          {/* Search & Filter Controls */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
+            <div className="relative w-full sm:w-72">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+              <Input
+                placeholder="Cari ID Voucher / nama / reward..."
+                value={redemptionSearch}
+                onChange={(e) => setRedemptionSearch(e.target.value)}
+                className="pl-9 text-xs h-9 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+              />
+            </div>
 
-                  <div className="flex items-center gap-2">
-                    <Button
-                      onClick={() => {
-                        setSelectedRedemption(red);
-                        setTicketModalOpen(true);
-                      }}
-                      variant="outline"
-                      size="sm"
-                      className="text-xs h-9 gap-1.5 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300"
-                    >
-                      <Ticket className="w-4 h-4 text-emerald-600" />
-                      <span>Lihat Voucher QR</span>
-                    </Button>
+            {/* Status Filter Pills */}
+            <div className="flex items-center space-x-1.5 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
+              <button
+                onClick={() => setRedemptionStatusFilter('all')}
+                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors shrink-0 ${
+                  redemptionStatusFilter === 'all'
+                    ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
+                }`}
+              >
+                Semua ({redemptions.length})
+              </button>
+              <button
+                onClick={() => setRedemptionStatusFilter('pending')}
+                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors shrink-0 ${
+                  redemptionStatusFilter === 'pending'
+                    ? 'bg-amber-500 text-white shadow-xs'
+                    : 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 hover:bg-amber-100'
+                }`}
+              >
+                Pending
+              </button>
+              <button
+                onClick={() => setRedemptionStatusFilter('completed')}
+                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors shrink-0 ${
+                  redemptionStatusFilter === 'completed'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100'
+                }`}
+              >
+                Selesai
+              </button>
+              <button
+                onClick={() => setRedemptionStatusFilter('rejected')}
+                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors shrink-0 ${
+                  redemptionStatusFilter === 'rejected'
+                    ? 'bg-rose-600 text-white shadow-xs'
+                    : 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 hover:bg-rose-100'
+                }`}
+              >
+                Ditolak
+              </button>
+            </div>
+          </div>
+
+          {filteredAndSortedRedemptions.length === 0 ? (
+            <EmptyState title="Tidak Ada Voucher" description="Tidak ada data voucher penukaran yang sesuai dengan filter atau pencarian Anda." />
+          ) : (
+            <div className="space-y-3 pt-1">
+              {filteredAndSortedRedemptions.map((red) => {
+                const st = (red.status || '').toLowerCase();
+                const isPending = st === 'pending' || st === 'awaiting_confirmation' || st === 'citizen_confirmed';
+
+                return (
+                  <div
+                    key={red.redemptionId || red.id}
+                    className={`p-4 rounded-2xl border flex flex-col md:flex-row md:items-center justify-between gap-3 transition-all ${
+                      isPending
+                        ? 'bg-amber-50/70 dark:bg-amber-950/40 border-amber-300 dark:border-amber-700 shadow-xs ring-1 ring-amber-400/50'
+                        : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800'
+                    }`}
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-900 dark:text-slate-100 text-sm">
+                          {red.rewardName || red.rewardTitle}
+                        </span>
+                        <StatusBadge status={red.status} />
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Pemohon: <span className="font-bold text-slate-800 dark:text-slate-200">{red.userName}</span> ({red.userMemberId || 'N/A'}) •{' '}
+                        <span className="font-mono text-emerald-600 font-extrabold">{red.pointsRequired || red.pointsUsed} Pts</span>
+                      </p>
+                      <p className="text-[11px] text-slate-400 font-mono">
+                        Redemption ID: <strong className="text-slate-700 dark:text-slate-300">{red.redemptionId || red.id}</strong> •{' '}
+                        <span>
+                          {new Date(red.createdAt?.seconds ? red.createdAt.seconds * 1000 : red.createdAt || Date.now()).toLocaleString('id-ID')}
+                        </span>
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Button
+                        onClick={() => {
+                          setSelectedRedemption(red);
+                          setTicketModalOpen(true);
+                        }}
+                        className={`text-xs h-9 gap-1.5 font-bold shadow-xs ${
+                          isPending
+                            ? 'bg-amber-600 hover:bg-amber-700 text-white animate-pulse'
+                            : 'bg-slate-800 hover:bg-slate-900 text-white dark:bg-slate-700'
+                        }`}
+                      >
+                        <Ticket className="w-4 h-4" />
+                        <span>{isPending ? 'Proses Voucher QR' : 'Lihat Voucher QR'}</span>
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </SectionCard>

@@ -69,7 +69,7 @@ export const DevicesPage = () => {
   const handleApproveDevice = async (device) => {
     try {
       await approveDevice(device.deviceId, userProfile);
-      showToast(`✅ Perangkat "${device.name}" (${device.deviceId}) berhasil disetujui! Status approval menjadi 'approved'.`);
+      showToast(`Perangkat "${device.name}" (${device.deviceId}) berhasil disetujui! Status approval menjadi 'approved'.`);
     } catch (err) {
       showToast(err.message || 'Gagal menyetujui perangkat.', 'error');
     }
@@ -85,7 +85,7 @@ export const DevicesPage = () => {
       onConfirm: async () => {
         try {
           await rejectDevice(device.deviceId, userProfile, 'Ditolak oleh Administrator');
-          showToast(`❌ Perangkat "${device.name}" (${device.deviceId}) telah ditolak.`);
+          showToast(`Perangkat "${device.name}" (${device.deviceId}) telah ditolak.`);
         } catch (err) {
           showToast(err.message || 'Gagal menolak perangkat.', 'error');
         } finally {
@@ -119,7 +119,7 @@ export const DevicesPage = () => {
     try {
       playChime();
       await pingDevice(device.deviceId, userProfile?.fullName || 'Admin');
-      showToast(`🔔 Sinyal Ping dikirim ke "${device.name}" (${device.deviceId})! Buzzer/LED ESP32 akan berbunyi.`);
+      showToast(`Sinyal Ping dikirim ke "${device.name}" (${device.deviceId})! Buzzer/LED ESP32 akan berbunyi.`);
     } catch (err) {
       showToast(err.message || 'Gagal mengirim sinyal ping.', 'error');
     }

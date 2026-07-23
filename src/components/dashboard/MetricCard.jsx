@@ -55,14 +55,14 @@ export const MetricCard = ({
             </div>
           )}
         </div>
-        <div className="mt-3 flex items-baseline justify-between">
-          <div className={cn('text-2xl font-extrabold tracking-tight', currentTheme.value)}>
+        <div className="mt-3 flex flex-wrap items-baseline justify-between gap-1">
+          <div className={cn('text-lg sm:text-2xl font-extrabold tracking-tight', currentTheme.value)}>
             {value}
           </div>
           {trend && (
             <span
               className={cn(
-                'text-xs font-semibold px-2 py-0.5 rounded-full',
+                'text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full shrink-0',
                 trendType === 'positive' && 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400',
                 trendType === 'negative' && 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400',
                 trendType === 'neutral' && 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'

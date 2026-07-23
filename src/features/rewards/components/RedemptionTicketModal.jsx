@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { VoucherQRCode } from './VoucherQRCode';
 import { rewardService } from '@/services/rewardService';
 import { useClientSettings } from '@/context/ClientSettingsContext';
+import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -16,17 +17,30 @@ import {
   Loader2,
   ShieldCheck,
   Camera,
+  MapPin,
 } from 'lucide-react';
 
-export const RedemptionTicketModal = ({ isOpen, onClose, redemption: initialRedemption }) => {
+export const RedemptionTicketModal = ({ isOpen, onClose, redemption: initialRedemption, isOfficerMode = false }) => {
+  const { userProfile, user } = useAuth();
   const [redemption, setRedemption] = useState(initialRedemption);
   const [isConfirmingReceipt, setIsConfirmingReceipt] = useState(false);
   const { playChime } = useClientSettings();
 
-  const redId = initialRedemption?.redemptionId || initialRedemption?.id;
+  const userRole = userProfile?.role?.toLowerCase();
+  const isOfficer = isOfficerMode || userRole === 'officer' || userRole === 'admin';
+
+  const redId = initialRedemption?.redemptionId || initialRedemption?.id || redemption?.redemptionId || redemption?.id;
 
   useEffect(() => {
-    setRedemption(initialRedemption);
+    if (initialRedemption) {
+      setRedemption((prev) => {
+        const sameDoc = (prev?.redemptionId || prev?.id) === (initialRedemption?.redemptionId || initialRedemption?.id);
+        if (sameDoc && prev?.status && prev.status !== initialRedemption.status) {
+          return { ...initialRedemption, ...prev };
+        }
+        return initialRedemption;
+      });
+    }
   }, [initialRedemption]);
 
   // Real-time listener for live status updates on this ticket
@@ -35,7 +49,7 @@ export const RedemptionTicketModal = ({ isOpen, onClose, redemption: initialRede
 
     const unsubscribe = rewardService.listenToRedemption(redId, (latestData) => {
       setRedemption((prev) => {
-        if (prev?.status !== latestData.status) {
+        if (prev?.status && prev.status !== latestData.status) {
           playChime();
         }
         return { ...prev, ...latestData };
@@ -49,26 +63,29 @@ export const RedemptionTicketModal = ({ isOpen, onClose, redemption: initialRede
 
   const isPending = redemption.status === 'pending';
   const isAwaitingConfirmation = redemption.status === 'awaiting_confirmation';
-  const isCitizenConfirmed = redemption.status === 'citizen_confirmed';
   const isCompleted = redemption.status === 'completed';
   const isRejected = redemption.status === 'rejected';
 
-  // Citizen confirms physical receipt of the reward item
-  const handleConfirmReceipt = async () => {
+  // Perform handshake confirmation for the viewing party (Officer or Citizen)
+  const handleConfirmHandshake = async () => {
     setIsConfirmingReceipt(true);
     try {
-      await rewardService.confirmCitizenReceipt(redId);
+      if (isOfficer) {
+        await rewardService.confirmOfficerHandshake(redId, userProfile?.uid || user?.uid);
+      } else {
+        await rewardService.confirmCitizenReceipt(redId);
+      }
       playChime();
     } catch (err) {
-      console.error('Error confirming receipt:', err);
+      console.error('Error confirming handshake:', err);
     } finally {
       setIsConfirmingReceipt(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs font-sans animate-in fade-in duration-150">
-      <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden relative max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-xs font-sans animate-in fade-in duration-150 overflow-y-auto">
+      <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden relative max-h-[90vh] flex flex-col my-auto">
         {/* Close Button */}
         <button
           onClick={onClose}
@@ -78,7 +95,7 @@ export const RedemptionTicketModal = ({ isOpen, onClose, redemption: initialRede
         </button>
 
         {/* Modal Header */}
-        <div className="p-6 pb-4 border-b border-slate-100 dark:border-slate-800 text-center space-y-2 shrink-0">
+        <div className="p-5 sm:p-6 pb-4 border-b border-slate-100 dark:border-slate-800 text-center space-y-2 shrink-0">
           <div className={`inline-flex p-3 rounded-2xl mb-1 ${
             isCompleted
               ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400'
@@ -99,19 +116,13 @@ export const RedemptionTicketModal = ({ isOpen, onClose, redemption: initialRede
             {isAwaitingConfirmation && (
               <Badge className="bg-amber-500 text-white gap-1 text-xs px-3 py-1 animate-pulse">
                 <ShieldCheck className="w-3.5 h-3.5" />
-                <span>Langkah 2 — Konfirmasi Penerimaan Barang</span>
-              </Badge>
-            )}
-            {isCitizenConfirmed && (
-              <Badge className="bg-blue-600 text-white gap-1 text-xs px-3 py-1">
-                <Clock className="w-3.5 h-3.5 animate-spin" />
-                <span>Langkah 3 — Memproses Pemotongan Poin</span>
+                <span>Langkah 2 — Handshake Konfirmasi 2 Pihak</span>
               </Badge>
             )}
             {isCompleted && (
               <Badge className="bg-emerald-600 text-white gap-1 text-xs px-3 py-1 font-bold">
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>Transaksi Berhasil dan Selesai</span>
+                <span>Transaksi Berhasil & Selesai</span>
               </Badge>
             )}
             {isRejected && (
@@ -124,7 +135,7 @@ export const RedemptionTicketModal = ({ isOpen, onClose, redemption: initialRede
         </div>
 
         {/* Modal Content Body */}
-        <div className="p-6 space-y-5 overflow-y-auto">
+        <div className="p-4 sm:p-6 space-y-4 flex-1 min-h-0 overflow-y-auto">
 
           {/* SUCCESS MARKER */}
           {isCompleted && (
@@ -133,12 +144,11 @@ export const RedemptionTicketModal = ({ isOpen, onClose, redemption: initialRede
                 <CheckCircle2 className="w-8 h-8" />
               </div>
               <h4 className="font-extrabold text-emerald-900 dark:text-emerald-200 text-base">
-                Penukaran Poin Berhasil
+                Penukaran Poin Berhasil & Terkonfirmasi
               </h4>
               <p className="text-xs text-emerald-700 dark:text-emerald-300">
-                Poin Anda telah dipotong sebesar <strong>{redemption.pointsRequired} Pts</strong>. Terima kasih telah mendukung program desa bersih SCV.
+                Poin sebesar <strong>{redemption.pointsRequired} Pts</strong> telah berhasil dipotong dan stok barang telah diperbarui. Terima kasih!
               </p>
-              {/* Proof photo — also visible after completion */}
               {redemption.proofImageUrl && (
                 <div className="mt-3 space-y-1.5 text-left">
                   <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1">
@@ -148,7 +158,7 @@ export const RedemptionTicketModal = ({ isOpen, onClose, redemption: initialRede
                   <div className="w-full h-40 bg-slate-900 rounded-xl overflow-hidden border border-emerald-300 dark:border-emerald-800">
                     <img
                       src={redemption.proofImageUrl}
-                      alt="Bukti penyerahan barang dari petugas"
+                      alt="Bukti penyerahan barang"
                       className="w-full h-full object-cover"
                     />
                   </div>
@@ -157,80 +167,133 @@ export const RedemptionTicketModal = ({ isOpen, onClose, redemption: initialRede
             </div>
           )}
 
-          {/* DUAL-CONFIRMATION HANDSHAKE — Citizen confirmation step */}
+          {/* DUAL-CONFIRMATION HANDSHAKE STEP */}
           {isAwaitingConfirmation && (
             <div className="p-4 bg-amber-50 dark:bg-amber-950/60 border-2 border-amber-400 dark:border-amber-700 rounded-2xl space-y-3 animate-in zoom-in-95 duration-200 shadow-md">
               <div className="flex items-start gap-3">
                 <div className="p-2.5 bg-amber-500 text-white rounded-xl shrink-0 mt-0.5">
                   <ShieldCheck className="w-5 h-5" />
                 </div>
-                <div>
+                <div className="flex-1">
                   <h4 className="font-extrabold text-amber-900 dark:text-amber-200 text-sm">
-                    Konfirmasi Penerimaan Fisik Barang
+                    Konfirmasi Penyerahan Fisik (Handshake 2 Pihak)
                   </h4>
                   <p className="text-xs text-amber-800 dark:text-amber-300 mt-0.5">
-                    Petugas <strong className="text-slate-900 dark:text-slate-100">{redemption.officerName || 'Station'}</strong> sedang menyerahkan barang <strong>"{redemption.rewardName}"</strong>. Pastikan barang sudah ada di tangan Anda sebelum mengonfirmasi.
+                    Kedua pihak (Petugas & Warga) wajib menekan tombol konfirmasi pada perangkat masing-masing untuk menyelesaikan penukaran.
                   </p>
                 </div>
               </div>
 
-              {/* Proof photo from officer — shown prominently to citizen */}
-              {redemption.proofImageUrl ? (
-                <div className="space-y-1.5">
+              {/* Proof photo & details */}
+              {redemption.proofImageUrl && (
+                <div className="space-y-2">
                   <span className="text-[11px] font-bold text-amber-900 dark:text-amber-200 flex items-center gap-1">
                     <Camera className="w-3.5 h-3.5 text-amber-600" />
                     Foto Bukti Penyerahan dari Petugas
                   </span>
-                  <div className="w-full h-52 bg-slate-950 rounded-xl overflow-hidden border-2 border-amber-300 dark:border-amber-700 shadow-inner">
+                  <div className="w-full h-48 bg-slate-950 rounded-xl overflow-hidden border-2 border-amber-300 dark:border-amber-700 shadow-inner relative">
                     <img
                       src={redemption.proofImageUrl}
-                      alt="Foto bukti penyerahan barang dari petugas"
+                      alt="Foto bukti penyerahan barang"
                       className="w-full h-full object-cover"
                     />
+                    <div className="absolute bottom-2 left-2 right-2 bg-slate-950/80 backdrop-blur-xs p-2 rounded-lg border border-white/10 text-white text-[11px] flex justify-between items-center">
+                      <div>
+                        <span className="font-bold block text-emerald-400">{redemption.officerName || 'Petugas Station'}</span>
+                        <span className="text-slate-300 text-[10px]">{redemption.postName || 'Posko SCV Utama'}</span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <div className="p-2.5 bg-amber-100 dark:bg-amber-950 border border-amber-300 dark:border-amber-800 rounded-xl text-[11px] text-amber-800 dark:text-amber-400 flex items-center gap-1.5">
-                  <Camera className="w-3.5 h-3.5 shrink-0" />
-                  <span>Petugas sedang mengambil foto bukti penyerahan...</span>
                 </div>
               )}
 
-              <Button
-                onClick={handleConfirmReceipt}
-                disabled={isConfirmingReceipt}
-                className="w-full bg-amber-600 hover:bg-amber-700 text-white text-xs h-11 font-bold gap-2 shadow-xs"
-              >
-                {isConfirmingReceipt ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Mengonfirmasi...</span>
-                  </>
+              {/* Status Indicators for Both Parties */}
+              <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-amber-200 dark:border-amber-800 text-xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-600 dark:text-slate-400 font-semibold">Konfirmasi Petugas:</span>
+                  {redemption.officerConfirmed ? (
+                    <Badge className="bg-emerald-600 text-white text-[10px] gap-1">
+                      <CheckCircle2 className="w-3 h-3" />
+                      <span>Sudah Konfirmasi</span>
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-amber-600 dark:text-amber-400 border-amber-300 text-[10px] gap-1">
+                      <Clock className="w-3 h-3 animate-spin" />
+                      <span>Menunggu Tombol Petugas</span>
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-600 dark:text-slate-400 font-semibold">Konfirmasi Warga:</span>
+                  {redemption.citizenConfirmed ? (
+                    <Badge className="bg-emerald-600 text-white text-[10px] gap-1">
+                      <CheckCircle2 className="w-3 h-3" />
+                      <span>Sudah Konfirmasi</span>
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-amber-600 dark:text-amber-400 border-amber-300 text-[10px] gap-1">
+                      <Clock className="w-3 h-3 animate-spin" />
+                      <span>Menunggu Tombol Warga</span>
+                    </Badge>
+                  )}
+                </div>
+              </div>
+
+              {/* Button Action depending on who is viewing */}
+              {isOfficer ? (
+                redemption.officerConfirmed ? (
+                  <div className="p-2.5 bg-amber-100 dark:bg-amber-950 border border-amber-300 dark:border-amber-800 rounded-xl text-xs text-amber-800 dark:text-amber-300 text-center font-bold">
+                    Konfirmasi Petugas Selesai. Menunggu Warga menekan tombol di HP miliknya...
+                  </div>
                 ) : (
-                  <>
-                    <PackageCheck className="w-5 h-5" />
-                    <span>Ya, Saya Sudah Menerima Barang Secara Fisik</span>
-                  </>
-                )}
-              </Button>
+                  <Button
+                    onClick={handleConfirmHandshake}
+                    disabled={isConfirmingReceipt}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-11 font-bold gap-2 shadow-xs"
+                  >
+                    {isConfirmingReceipt ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Mengonfirmasi...</span>
+                      </>
+                    ) : (
+                      <>
+                        <PackageCheck className="w-5 h-5" />
+                        <span>Konfirmasi Penyerahan Barang (Petugas)</span>
+                      </>
+                    )}
+                  </Button>
+                )
+              ) : (
+                redemption.citizenConfirmed ? (
+                  <div className="p-2.5 bg-amber-100 dark:bg-amber-950 border border-amber-300 dark:border-amber-800 rounded-xl text-xs text-amber-800 dark:text-amber-300 text-center font-bold">
+                    Konfirmasi Warga Selesai. Menunggu Petugas menekan tombol di perangkatnya...
+                  </div>
+                ) : (
+                  <Button
+                    onClick={handleConfirmHandshake}
+                    disabled={isConfirmingReceipt}
+                    className="w-full bg-amber-600 hover:bg-amber-700 text-white text-xs h-11 font-bold gap-2 shadow-xs"
+                  >
+                    {isConfirmingReceipt ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Mengonfirmasi...</span>
+                      </>
+                    ) : (
+                      <>
+                        <PackageCheck className="w-5 h-5" />
+                        <span>Konfirmasi Penerimaan Barang (Warga)</span>
+                      </>
+                    )}
+                  </Button>
+                )
+              )}
             </div>
           )}
 
-          {/* CITIZEN CONFIRMED — waiting for officer to finalize */}
-          {isCitizenConfirmed && (
-            <div className="p-4 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-900 rounded-2xl text-center space-y-1.5 animate-in zoom-in-95 duration-200">
-              <Clock className="w-8 h-8 text-blue-600 animate-spin mx-auto" />
-              <h4 className="font-bold text-blue-900 dark:text-blue-200 text-sm">
-                Penerimaan Barang Terkonfirmasi
-              </h4>
-              <p className="text-xs text-blue-700 dark:text-blue-300">
-                Menunggu petugas menyelesaikan pemotongan poin secara atomik di sistemnya.
-              </p>
-            </div>
-          )}
-
-          {/* QR Code — shown when status is pending or awaiting (officer needs to scan) */}
-          {(isPending || isAwaitingConfirmation) && (
+          {/* QR Code — shown when status is pending */}
+          {isPending && (
             <VoucherQRCode value={redemption.redemptionId} size={170} />
           )}
 
@@ -256,13 +319,25 @@ export const RedemptionTicketModal = ({ isOpen, onClose, redemption: initialRede
             </div>
 
             {redemption.officerName && (
-              <div className="flex justify-between items-center">
+              <div className="flex justify-between items-center pb-2 border-b border-slate-200 dark:border-slate-800">
                 <span className="text-slate-500 dark:text-slate-400 font-semibold flex items-center gap-1">
                   <UserCheck className="w-3.5 h-3.5 text-blue-500" />
                   Petugas Verifikator:
                 </span>
                 <span className="font-bold text-slate-800 dark:text-slate-200">
                   {redemption.officerName}
+                </span>
+              </div>
+            )}
+
+            {redemption.postName && (
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500 dark:text-slate-400 font-semibold flex items-center gap-1">
+                  <MapPin className="w-3.5 h-3.5 text-rose-500" />
+                  Posko Pengumpulan:
+                </span>
+                <span className="font-bold text-slate-800 dark:text-slate-200">
+                  {redemption.postName}
                 </span>
               </div>
             )}

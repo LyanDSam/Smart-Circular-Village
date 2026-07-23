@@ -70,10 +70,10 @@ export const UnknownRfidModal = ({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-        <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-rose-200 dark:border-rose-900/60 overflow-hidden font-sans">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto">
+        <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-rose-200 dark:border-rose-900/60 overflow-hidden font-sans flex flex-col max-h-[90vh] my-auto">
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-rose-100 dark:border-rose-950 bg-rose-50/60 dark:bg-rose-950/40">
+          <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-rose-100 dark:border-rose-950 bg-rose-50/60 dark:bg-rose-950/40 shrink-0">
             <div className="flex items-center space-x-2.5 text-rose-800 dark:text-rose-200">
               <div className="p-2 bg-rose-600 text-white rounded-xl shadow-xs">
                 <AlertTriangle className="w-5 h-5 animate-bounce" />
@@ -94,7 +94,7 @@ export const UnknownRfidModal = ({
           </div>
 
           {/* Modal Content */}
-          <div className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+          <div className="p-4 sm:p-6 space-y-4 flex-1 min-h-0 overflow-y-auto">
             {/* Description Warning Box */}
             <div className="p-3.5 bg-rose-50 dark:bg-rose-950/30 rounded-xl border border-rose-200 dark:border-rose-900 text-xs text-rose-800 dark:text-rose-200 space-y-1">
               <p className="font-semibold flex items-center gap-1.5">

@@ -49,10 +49,10 @@ export const RewardFormModal = ({ isOpen, onClose, onSubmit, initialData = null,
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs font-sans animate-in fade-in duration-150">
-      <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden relative">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-xs font-sans animate-in fade-in duration-150 overflow-y-auto">
+      <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden relative flex flex-col max-h-[90vh] my-auto">
         {/* Header */}
-        <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0">
           <div className="flex items-center space-x-2">
             <div className="p-2 bg-emerald-600 text-white rounded-xl">
               <Gift className="w-5 h-5" />
@@ -73,8 +73,8 @@ export const RewardFormModal = ({ isOpen, onClose, onSubmit, initialData = null,
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit}>
-          <div className="p-6 space-y-4 text-xs">
+        <form onSubmit={handleSubmit} className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <div className="p-4 sm:p-6 space-y-4 text-xs flex-1 min-h-0 overflow-y-auto">
             {/* Reward Name */}
             <div className="space-y-1">
               <label className="font-bold text-slate-700 dark:text-slate-300">Nama Barang / Reward</label>

@@ -7,6 +7,7 @@ import { RedemptionTicketModal } from '@/features/rewards/components/RedemptionT
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/common/LoadingState';
 import { EmptyState } from '@/components/common/EmptyState';
 import {
@@ -18,6 +19,7 @@ import {
   RefreshCw,
   ShieldCheck,
   PackageCheck,
+  Search,
 } from 'lucide-react';
 
 export const MyRedemptionsPage = () => {
@@ -27,6 +29,10 @@ export const MyRedemptionsPage = () => {
   const [loading, setLoading] = useState(true);
   const [selectedRedemption, setSelectedRedemption] = useState(null);
   const [ticketModalOpen, setTicketModalOpen] = useState(false);
+
+  // Search & Status Filter state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'pending' | 'completed' | 'rejected'
 
   const uid = userProfile?.uid || user?.uid;
 
@@ -67,6 +73,47 @@ export const MyRedemptionsPage = () => {
     const updated = redemptions.find((r) => (r.redemptionId || r.id) === redId);
     if (updated) setSelectedRedemption(updated);
   }, [redemptions]);
+
+  // Sort and Filter Redemptions: Pending always at top, sorted by time descending
+  const filteredAndSortedRedemptions = redemptions
+    .filter((red) => {
+      const redId = (red.redemptionId || red.id || '').toLowerCase();
+      const rewardName = (red.rewardName || red.rewardTitle || '').toLowerCase();
+      const query = searchQuery.toLowerCase().trim();
+
+      const matchesSearch = !query || redId.includes(query) || rewardName.includes(query);
+
+      const st = (red.status || '').toLowerCase();
+      let matchesStatus = true;
+      if (statusFilter === 'pending') {
+        matchesStatus = st === 'pending' || st === 'awaiting_confirmation' || st === 'citizen_confirmed';
+      } else if (statusFilter === 'completed') {
+        matchesStatus = st === 'completed' || st === 'approved' || st === 'collected';
+      } else if (statusFilter === 'rejected') {
+        matchesStatus = st === 'rejected';
+      }
+
+      return matchesSearch && matchesStatus;
+    })
+    .sort((a, b) => {
+      const isPendingA = ['pending', 'awaiting_confirmation', 'citizen_confirmed'].includes((a.status || '').toLowerCase());
+      const isPendingB = ['pending', 'awaiting_confirmation', 'citizen_confirmed'].includes((b.status || '').toLowerCase());
+
+      // Pending items ALWAYS go to the top
+      if (isPendingA && !isPendingB) return -1;
+      if (!isPendingA && isPendingB) return 1;
+
+      // Within same priority, sort by time descending (newest first)
+      const getTime = (item) => {
+        if (item.createdAt?.seconds) return item.createdAt.seconds * 1000;
+        if (item.createdAt?.toDate) return item.createdAt.toDate().getTime();
+        if (typeof item.createdAt === 'number') return item.createdAt;
+        if (typeof item.createdAt === 'string') return new Date(item.createdAt).getTime();
+        return 0;
+      };
+
+      return getTime(b) - getTime(a);
+    });
 
   const getStatusBadge = (red) => {
     switch (red.status) {
@@ -136,38 +183,93 @@ export const MyRedemptionsPage = () => {
         </div>
       )}
 
+      {/* Filter Control Bar */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50 dark:bg-slate-900/60 p-3 rounded-2xl border border-slate-200 dark:border-slate-800">
+        <div className="relative w-full sm:w-72">
+          <Input
+            placeholder="Cari ID Voucher / nama reward..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="text-xs h-9 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800"
+          />
+        </div>
+
+        <div className="flex items-center space-x-1.5 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
+          <button
+            onClick={() => setStatusFilter('all')}
+            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors shrink-0 ${
+              statusFilter === 'all'
+                ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900'
+                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100'
+            }`}
+          >
+            Semua ({redemptions.length})
+          </button>
+          <button
+            onClick={() => setStatusFilter('pending')}
+            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors shrink-0 ${
+              statusFilter === 'pending'
+                ? 'bg-amber-500 text-white shadow-xs'
+                : 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 hover:bg-amber-100'
+            }`}
+          >
+            Pending
+          </button>
+          <button
+            onClick={() => setStatusFilter('completed')}
+            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors shrink-0 ${
+              statusFilter === 'completed'
+                ? 'bg-emerald-600 text-white shadow-xs'
+                : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100'
+            }`}
+          >
+            Selesai
+          </button>
+          <button
+            onClick={() => setStatusFilter('rejected')}
+            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors shrink-0 ${
+              statusFilter === 'rejected'
+                ? 'bg-rose-600 text-white shadow-xs'
+                : 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 hover:bg-rose-100'
+            }`}
+          >
+            Ditolak
+          </button>
+        </div>
+      </div>
+
       {/* Content */}
       {loading ? (
         <LoadingState message="Memuat voucher penukaran Anda..." />
-      ) : redemptions.length === 0 ? (
+      ) : filteredAndSortedRedemptions.length === 0 ? (
         <EmptyState
-          title="Belum Ada Voucher Penukaran"
-          description="Anda belum pernah menukarkan poin dengan reward. Silakan jelajahi Katalog Reward!"
+          title="Tidak Ada Voucher"
+          description="Tidak ada voucher penukaran yang sesuai dengan filter atau pencarian Anda."
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {redemptions.map((red) => {
+          {filteredAndSortedRedemptions.map((red) => {
             const redId = red.redemptionId || red.id;
             const isAwaitingConfirmation = red.status === 'awaiting_confirmation';
-            const isCitizenConfirmed = red.status === 'citizen_confirmed';
+            const isPendingStatus = ['pending', 'awaiting_confirmation', 'citizen_confirmed'].includes((red.status || '').toLowerCase());
 
             return (
               <Card
                 key={redId}
                 className={`border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between ${
-                  isAwaitingConfirmation
-                    ? 'ring-2 ring-amber-400 dark:ring-amber-600'
+                  isPendingStatus
+                    ? 'ring-2 ring-amber-400 dark:ring-amber-600 bg-amber-50/20 dark:bg-amber-950/20'
                     : ''
                 }`}
               >
                 <CardContent className="p-5 space-y-4">
                   <div className="flex items-start justify-between">
                     <div className={`p-2.5 rounded-2xl ${
-                      isAwaitingConfirmation
+                      isPendingStatus
                         ? 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300'
                         : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300'
                     }`}>
-                      {isAwaitingConfirmation ? (
+                      {isPendingStatus ? (
                         <PackageCheck className="w-6 h-6" />
                       ) : (
                         <Gift className="w-6 h-6" />
@@ -193,7 +295,7 @@ export const MyRedemptionsPage = () => {
                     <div className="flex justify-between">
                       <span className="text-slate-400">Tanggal:</span>
                       <span className="text-slate-700 dark:text-slate-300">
-                        {new Date(red.createdAt?.seconds ? red.createdAt.seconds * 1000 : red.createdAt || Date.now()).toLocaleDateString('id-ID')}
+                        {new Date(red.createdAt?.seconds ? red.createdAt.seconds * 1000 : red.createdAt || Date.now()).toLocaleString('id-ID')}
                       </span>
                     </div>
                   </div>
@@ -206,6 +308,8 @@ export const MyRedemptionsPage = () => {
                     className={`w-full text-white text-xs h-10 gap-1.5 font-bold shadow-xs ${
                       isAwaitingConfirmation
                         ? 'bg-amber-600 hover:bg-amber-700 animate-pulse'
+                        : isPendingStatus
+                        ? 'bg-amber-500 hover:bg-amber-600'
                         : 'bg-emerald-600 hover:bg-emerald-700'
                     }`}
                   >

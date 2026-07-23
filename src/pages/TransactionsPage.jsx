@@ -192,7 +192,7 @@ export const TransactionsPage = () => {
           subtext="RTDB Realtime Queue"
           icon={Clock}
           color="amber"
-          trend={pendingList.length > 0 ? `${pendingList.length} Perlu Konfirmasi` : 'Bersih'}
+          trend={pendingList.length > 0 ? `${pendingList.length} Antrean` : 'Bersih'}
           trendType={pendingList.length > 0 ? 'negative' : 'positive'}
         />
         <MetricCard

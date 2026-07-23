@@ -80,10 +80,10 @@ export const DeviceForm = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 overflow-hidden font-sans">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto">
+      <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 overflow-hidden font-sans flex flex-col max-h-[90vh] my-auto">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40">
+        <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 shrink-0">
           <div className="flex items-center space-x-2 text-slate-900 dark:text-slate-100">
             <Cpu className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
             <h3 className="font-bold text-base">
@@ -99,7 +99,7 @@ export const DeviceForm = ({
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+        <form onSubmit={handleSubmit(onSubmit)} className="p-4 sm:p-6 space-y-4 flex-1 min-h-0 overflow-y-auto">
           {/* Device Type & Firmware */}
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -225,7 +225,7 @@ export const DeviceForm = ({
           </div>
 
           <div className="p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-[11px] text-slate-500 space-y-1">
-            <p>💡 <strong>Status Online/Offline:</strong> Dihitung secara otomatis di Realtime Database berdasarkan heartbeat timestamp (`lastSeen &lt; 60s`). Tidak disimpan statis di Firestore.</p>
+            <p><strong className="text-slate-900 dark:text-slate-100">Status Online/Offline:</strong> Dihitung secara otomatis di Realtime Database berdasarkan heartbeat timestamp (`lastSeen &lt; 60s`). Tidak disimpan statis di Firestore.</p>
           </div>
 
           {/* Buttons */}

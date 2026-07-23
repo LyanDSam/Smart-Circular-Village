@@ -197,7 +197,7 @@ export const rewardService = {
    * Real-time listener for a single redemption document.
    */
   listenToRedemption(redemptionId, callback) {
-    if (!redemptionId) return () => {};
+    if (!redemptionId) return () => { };
     const ref = doc(db, 'reward_redemptions', redemptionId);
     return onSnapshot(
       ref,
@@ -215,7 +215,7 @@ export const rewardService = {
    * Used in MyRedemptionsPage so the card list auto-updates on status change.
    */
   listenToCitizenRedemptions(userId, callback) {
-    if (!userId) return () => {};
+    if (!userId) return () => { };
     const ref = collection(db, 'reward_redemptions');
     const q = query(ref, where('userId', '==', userId));
     return onSnapshot(
@@ -250,7 +250,15 @@ export const rewardService = {
    * Officer scans QR & requests physical confirmation from Citizen.
    * Changes status -> 'awaiting_confirmation'.
    */
-  async requestOfficerVerification(redemptionId, officerId, officerName = 'Petugas Station', proofImageUrl = null, isAnonymous = false, officerRealName = null) {
+  async requestOfficerVerification(
+    redemptionId,
+    officerId,
+    officerName = 'Petugas Station',
+    proofImageUrl = null,
+    postName = 'Posko SCV Utama',
+    isAnonymous = false,
+    officerRealName = null
+  ) {
     if (!redemptionId) throw new Error('Redemption ID required.');
     const redRef = doc(db, 'reward_redemptions', redemptionId);
     const redSnap = await getDoc(redRef);
@@ -269,95 +277,121 @@ export const rewardService = {
       officerName: publicName,          // Shown publicly to citizen
       officerRealName: officerRealName || officerName || 'Petugas Station', // Always real, admin only
       officerIsAnonymous: Boolean(isAnonymous),
+      postName: (postName || 'Posko SCV Utama').trim(),
+      proofImageUrl: proofImageUrl || '',
+      officerConfirmed: false, // Handshake step 2 button required from officer
+      citizenConfirmed: false, // Handshake step 2 button required from citizen
       verificationRequestedAt: serverTimestamp(),
     };
-
-    if (proofImageUrl) {
-      updatePayload.proofImageUrl = proofImageUrl;
-    }
 
     await updateDoc(redRef, updatePayload);
     return true;
   },
 
   /**
-   * Citizen confirms physical receipt of the reward item on their screen.
-   * Changes status -> 'citizen_confirmed'.
+   * 2-Party Handshake: Execute confirmation for officer or citizen.
+   * Atomic completion occurs ONLY when BOTH officerConfirmed and citizenConfirmed become true!
    */
-  async confirmCitizenReceipt(redemptionId) {
+  async confirmHandshakeParty(redemptionId, party = 'citizen', officerId = null) {
     if (!redemptionId) throw new Error('Redemption ID required.');
-    const redRef = doc(db, 'reward_redemptions', redemptionId);
-    await updateDoc(redRef, {
-      status: 'citizen_confirmed',
-      citizenConfirmedAt: serverTimestamp(),
-    });
-    return true;
-  },
-
-  /**
-   * Confirm redemption request via Atomic WriteBatch.
-   * Performs:
-   * 1. Update `reward_redemptions/{redemptionId}` status -> 'completed', completedAt, officerId
-   * 2. Decrease `users/{userId}.points` using increment(-pointsRequired)
-   * 3. Decrease `rewards/{rewardId}.stock` using increment(-1)
-   */
-  async confirmRedemption(redemptionId, officerId) {
-    if (!redemptionId) throw new Error('Redemption ID required.');
-
     const redRef = doc(db, 'reward_redemptions', redemptionId);
     const redSnap = await getDoc(redRef);
     if (!redSnap.exists()) throw new Error(`Voucher penukaran "${redemptionId}" tidak ditemukan.`);
 
     const redemption = redSnap.data();
-    if (redemption.status === 'completed') {
-      throw new Error(`Penukaran "${redemptionId}" sudah pernah dikonfirmasi sebelumnya.`);
+    if (redemption.status === 'completed') return true;
+    if (redemption.status === 'rejected') throw new Error('Voucher penukaran telah ditolak.');
+
+    const isOfficer = party === 'officer';
+    const isCitizen = party === 'citizen';
+
+    const newOfficerConfirmed = isOfficer ? true : Boolean(redemption.officerConfirmed);
+    const newCitizenConfirmed = isCitizen ? true : Boolean(redemption.citizenConfirmed);
+
+    // If BOTH parties have now confirmed:
+    if (newOfficerConfirmed && newCitizenConfirmed) {
+      // Verify user points
+      const userRef = doc(db, 'users', redemption.userId);
+      const userSnap = await getDoc(userRef);
+      if (!userSnap.exists()) throw new Error('Data akun warga tidak ditemukan.');
+      const userPoints = userSnap.data().points || 0;
+      if (userPoints < redemption.pointsRequired) {
+        throw new Error(`Poin warga (${userPoints}) tidak mencukupi (${redemption.pointsRequired} Pts).`);
+      }
+
+      // Verify reward stock
+      const rewardRef = doc(db, 'rewards', redemption.rewardId);
+      const rewardSnap = await getDoc(rewardRef);
+      if (!rewardSnap.exists()) throw new Error('Data item reward tidak ditemukan.');
+      const currentStock = rewardSnap.data().stock || 0;
+      if (currentStock <= 0) {
+        throw new Error('Stok barang reward ini telah habis.');
+      }
+
+      // Perform atomic WriteBatch confirmation
+      const batch = writeBatch(db);
+
+      batch.update(redRef, {
+        status: 'completed',
+        officerConfirmed: true,
+        citizenConfirmed: true,
+        officerId: officerId || redemption.officerId || 'officer',
+        completedAt: serverTimestamp(),
+        citizenConfirmedAt: isCitizen ? serverTimestamp() : (redemption.citizenConfirmedAt || serverTimestamp()),
+        officerConfirmedAt: isOfficer ? serverTimestamp() : (redemption.officerConfirmedAt || serverTimestamp()),
+      });
+
+      batch.update(userRef, {
+        points: increment(-Number(redemption.pointsRequired)),
+        updatedAt: serverTimestamp(),
+      });
+
+      batch.update(rewardRef, {
+        stock: increment(-1),
+        updatedAt: serverTimestamp(),
+      });
+
+      await batch.commit();
+      return { completed: true };
+    } else {
+      // Partial handshake: update party flags, maintain 'awaiting_confirmation'
+      const updateData = {
+        status: 'awaiting_confirmation',
+      };
+      if (isOfficer) {
+        updateData.officerConfirmed = true;
+        updateData.officerConfirmedAt = serverTimestamp();
+        if (officerId) updateData.officerId = officerId;
+      }
+      if (isCitizen) {
+        updateData.citizenConfirmed = true;
+        updateData.citizenConfirmedAt = serverTimestamp();
+      }
+
+      await updateDoc(redRef, updateData);
+      return { completed: false, officerConfirmed: newOfficerConfirmed, citizenConfirmed: newCitizenConfirmed };
     }
-    if (redemption.status === 'rejected') {
-      throw new Error(`Penukaran "${redemptionId}" telah ditolak dan tidak dapat dikonfirmasi.`);
-    }
+  },
 
-    // Verify current user points
-    const userRef = doc(db, 'users', redemption.userId);
-    const userSnap = await getDoc(userRef);
-    if (!userSnap.exists()) throw new Error('Data akun warga penyetor tidak ditemukan.');
-    const userPoints = userSnap.data().points || 0;
-    if (userPoints < redemption.pointsRequired) {
-      throw new Error(`Poin warga (${userPoints}) tidak mencukupi untuk penukaran ini (${redemption.pointsRequired} poin).`);
-    }
+  /**
+   * Citizen confirms physical receipt of the reward item on their screen.
+   */
+  async confirmCitizenReceipt(redemptionId) {
+    return this.confirmHandshakeParty(redemptionId, 'citizen');
+  },
 
-    // Verify reward stock
-    const rewardRef = doc(db, 'rewards', redemption.rewardId);
-    const rewardSnap = await getDoc(rewardRef);
-    if (!rewardSnap.exists()) throw new Error('Data reward item tidak ditemukan.');
-    const currentStock = rewardSnap.data().stock || 0;
-    if (currentStock <= 0) {
-      throw new Error('Stok reward item ini telah habis.');
-    }
+  /**
+   * Officer confirms physical handoff of the reward item on their screen.
+   */
+  async confirmOfficerHandshake(redemptionId, officerId) {
+    return this.confirmHandshakeParty(redemptionId, 'officer', officerId);
+  },
 
-    // Atomic WriteBatch execution
-    const batch = writeBatch(db);
-
-    // 1. Update redemption status to completed (preserve officerName/officerRealName already set by requestOfficerVerification)
-    batch.update(redRef, {
-      status: 'completed',
-      officerId: officerId || 'officer',
-      completedAt: serverTimestamp(),
-    });
-
-    // 2. Deduct points from user
-    batch.update(userRef, {
-      points: increment(-Number(redemption.pointsRequired)),
-      updatedAt: serverTimestamp(),
-    });
-
-    // 3. Deduct 1 stock from reward item
-    batch.update(rewardRef, {
-      stock: increment(-1),
-      updatedAt: serverTimestamp(),
-    });
-
-    await batch.commit();
-    return true;
+  /**
+   * Confirm redemption request via Atomic WriteBatch (Manual override).
+   */
+  async confirmRedemption(redemptionId, officerId) {
+    return this.confirmHandshakeParty(redemptionId, 'officer', officerId);
   },
 
   /**
@@ -439,7 +473,7 @@ export const rewardService = {
       const redemptions = redSnap.docs.map((d) => d.data());
 
       const pendingCount = redemptions.filter((r) => r.status === 'pending').length;
-      
+
       const todayStr = new Date().toDateString();
       const completedTodayCount = redemptions.filter((r) => {
         if (r.status !== 'completed' || !r.completedAt) return false;
