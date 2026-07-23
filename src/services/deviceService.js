@@ -38,18 +38,33 @@ export const generateApiKey = () => {
  * - If status === 'maintenance' -> 'maintenance'
  * - Else -> 'online'
  */
+/**
+ * Compute Device Operational Connection Status from RTDB `lastSeen` heartbeat & live alerts.
+ * Rules:
+ * - If !device.isActive || device.isDeleted -> 'disabled'
+ * - If device.approvalStatus === 'pending' -> 'pending'
+ * - If device.approvalStatus === 'rejected' -> 'rejected'
+ * - If status === 'maintenance' -> 'maintenance'
+ * - If currentTime - lastSeen >= 60,000 ms (60 seconds) or !lastSeen -> 'offline'
+ * - If online (< 60s) AND liveRtdbNode/device has error alerts -> 'error'
+ * - If online (< 60s) AND liveRtdbNode/device has warning alerts -> 'warning'
+ * - Else -> 'online'
+ *
+ * NOTE: This returns runtime connectionStatus ONLY and NEVER overwrites Firestore approvalStatus.
+ */
 export const computeDeviceStatus = (device, liveRtdbNode = null) => {
   if (!device || device.isDeleted) return 'disabled';
-  if (device.approvalStatus === 'pending' || device.status === 'pending') return 'pending';
-  if (device.approvalStatus === 'rejected' || device.status === 'rejected') return 'rejected';
+  if (device.approvalStatus === 'pending') return 'pending';
+  if (device.approvalStatus === 'rejected') return 'rejected';
   if (device.isActive === false) return 'disabled';
-  if (device.status === 'maintenance' || liveRtdbNode?.status === 'maintenance') return 'maintenance';
 
   const rtdbStatus = (
     typeof liveRtdbNode === 'object' && liveRtdbNode?.status
       ? liveRtdbNode.status
       : device.status || ''
   ).toLowerCase();
+
+  if (rtdbStatus === 'maintenance' || device.status === 'maintenance') return 'maintenance';
 
   const alerts = liveRtdbNode?.alerts || device.alerts;
   const rawLastSeen =
@@ -60,11 +75,9 @@ export const computeDeviceStatus = (device, liveRtdbNode = null) => {
   let isOnline = false;
 
   if (typeof rawLastSeen === 'number') {
-    // If rawLastSeen is a small number (e.g. 32, 94 seconds uptime from ESP32 boot without NTP)
     if (rawLastSeen < 1000000) {
       isOnline = rtdbStatus === 'online' || Boolean(liveRtdbNode);
     } else {
-      // Standard Unix epoch timestamp
       const timestampMs = rawLastSeen * (rawLastSeen < 1e11 ? 1000 : 1);
       const diffMs = Date.now() - timestampMs;
       isOnline = diffMs < 60000 && diffMs >= -300000;
@@ -81,7 +94,6 @@ export const computeDeviceStatus = (device, liveRtdbNode = null) => {
 
   if (!isOnline) return 'offline';
 
-  // Check alert flags when device is actively connected
   if (alerts?.hasError || rtdbStatus === 'error') {
     return 'error';
   }
@@ -102,19 +114,17 @@ export const deviceService = {
   computeDeviceStatus,
 
   /**
-   * Automatically generate next sequential Device ID based on type.
-   * e.g., SCV-COLL-001, SCV-COLL-002 or SCV-COMP-001, SCV-COMP-002
+   * Automatically generate next sequential Device ID in SCV-XXXXX format (e.g. SCV-09009).
    */
-  async generateNextDeviceId(deviceType = 'collection_station') {
-    const prefix = deviceType === 'collection_station' ? 'SCV-COLL' : 'SCV-COMP';
+  async generateNextDeviceId() {
     try {
       const devicesRef = collection(db, 'devices');
       const snap = await getDocs(devicesRef);
-      let maxNum = 0;
+      let maxNum = 9000;
       if (!snap.empty) {
         snap.docs.forEach((d) => {
-          const id = d.id;
-          if (id.startsWith(prefix)) {
+          const id = d.id.toUpperCase();
+          if (id.startsWith('SCV-')) {
             const parts = id.split('-');
             const num = parseInt(parts[parts.length - 1], 10);
             if (!isNaN(num) && num > maxNum) {
@@ -123,18 +133,17 @@ export const deviceService = {
           }
         });
       }
-      const nextNum = String(maxNum + 1).padStart(3, '0');
-      return `${prefix}-${nextNum}`;
+      const nextNum = String(maxNum + 1).padStart(5, '0');
+      return `SCV-${nextNum}`;
     } catch (err) {
-      const randomNum = String(Math.floor(Math.random() * 899) + 100);
-      return `${prefix}-${randomNum}`;
+      return `SCV-09009`;
     }
   },
+
   /**
-   * Fetch devices metadata directly from Cloud Firestore & enrich with computed status from RTDB heartbeat.
-   * STRICTLY NO DUMMY FALLBACK DATA.
+   * Fetch devices metadata directly from Cloud Firestore & merge with RTDB telemetry and status into Unified UI Model.
    */
-  async getDevices({ search = '', type = 'all', village = 'all', page = 1, pageSize = 10 } = {}) {
+  async getDevices({ search = '', type = 'all', village = 'all', status = 'all', page = 1, pageSize = 10 } = {}) {
     let devicesList = [];
 
     try {
@@ -146,7 +155,7 @@ export const deviceService = {
           const data = d.data();
           return {
             deviceId: d.id,
-            deviceType: data.deviceType || data.type || 'compost',
+            deviceType: data.deviceType || data.type || 'collection_station',
             ...data,
           };
         });
@@ -159,20 +168,24 @@ export const deviceService = {
     // Filter out soft-deleted
     devicesList = devicesList.filter((d) => !d.isDeleted);
 
-    // Compute online status dynamically for each device
+    // Compute dynamic operational connectionStatus for each device without overwriting Firestore approvalStatus
     devicesList = devicesList.map((d) => ({
       ...d,
-      status: computeDeviceStatus(d),
+      connectionStatus: computeDeviceStatus(d),
+      // Retain backward-compatible status field while prioritizing approvalStatus
+      status: d.approvalStatus || d.status || 'pending',
     }));
 
-    // Filter by Device Status
+    // Filter by Approval / Status
     if (status !== 'all') {
       if (status === 'pending') {
-        devicesList = devicesList.filter((d) => d.approvalStatus === 'pending' || d.status === 'pending');
+        devicesList = devicesList.filter((d) => d.approvalStatus === 'pending');
       } else if (status === 'rejected') {
-        devicesList = devicesList.filter((d) => d.approvalStatus === 'rejected' || d.status === 'rejected');
+        devicesList = devicesList.filter((d) => d.approvalStatus === 'rejected');
+      } else if (status === 'approved') {
+        devicesList = devicesList.filter((d) => d.approvalStatus === 'approved');
       } else {
-        devicesList = devicesList.filter((d) => d.status === status);
+        devicesList = devicesList.filter((d) => d.connectionStatus === status || d.status === status);
       }
     }
 
@@ -194,8 +207,7 @@ export const deviceService = {
           (d.deviceId && d.deviceId.toLowerCase().includes(queryLower)) ||
           (d.name && d.name.toLowerCase().includes(queryLower)) ||
           (d.location?.address && d.location.address.toLowerCase().includes(queryLower)) ||
-          (d.location?.village && d.location.village.toLowerCase().includes(queryLower)) ||
-          (d.firmwareVersion && d.firmwareVersion.toLowerCase().includes(queryLower))
+          (d.location?.village && d.location.village.toLowerCase().includes(queryLower))
       );
     }
 
@@ -239,12 +251,18 @@ export const deviceService = {
 
         const dev = {
           deviceId: snap.id,
-          deviceType: data.deviceType || data.type,
+          deviceType: data.deviceType || data.type || 'collection_station',
           ...data,
+          // firmwareVersion comes from RTDB heartbeat node
+          firmwareVersion: rtdbData?.firmwareVersion || data.firmwareVersion || '1.0.0',
           ...(rtdbData || {}),
         };
 
-        return { ...dev, status: computeDeviceStatus(dev, rtdbData) };
+        return {
+          ...dev,
+          connectionStatus: computeDeviceStatus(dev, rtdbData),
+          status: data.approvalStatus || data.status || 'pending',
+        };
       }
     } catch (err) {
       console.error('Error fetching device from Firestore:', err);
@@ -255,7 +273,7 @@ export const deviceService = {
 
   /**
    * Create new IoT Device metadata in Cloud Firestore & initialize RTDB node.
-   * Device is registered with approvalStatus = 'pending' awaiting Admin review.
+   * New device is registered with approvalStatus = 'pending' and isActive = false awaiting Admin review.
    */
   async createDevice(deviceData) {
     const cleanId = deviceData.deviceId.trim().toUpperCase();
@@ -268,11 +286,11 @@ export const deviceService = {
 
     const apiKey = generateApiKey();
 
-    // Firestore Schema: Metadata with approvalStatus: 'pending'
+    // Firestore Schema: Initial registration -> approvalStatus: 'pending', isActive: false
     const newDevice = {
       deviceId: cleanId,
       name: deviceData.name.trim(),
-      deviceType: deviceData.deviceType,
+      deviceType: deviceData.deviceType || 'collection_station',
       location: {
         village: deviceData.location?.village?.trim() || '',
         address: deviceData.location?.address?.trim() || '',
@@ -280,9 +298,8 @@ export const deviceService = {
         longitude: deviceData.location?.longitude || null,
       },
       apiKey: apiKey,
-      firmwareVersion: deviceData.firmwareVersion?.trim() || '1.0.0',
       approvalStatus: 'pending',
-      isActive: true,
+      isActive: false, // New device starts INACTIVE until approved by Admin
       isDeleted: false,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -298,6 +315,7 @@ export const deviceService = {
       if (deviceData.deviceType === 'compost') {
         await set(rtdbRef, {
           lastSeen: Math.floor(Date.now() / 1000),
+          firmwareVersion: deviceData.firmwareVersion?.trim() || '1.0.0',
           telemetry: {
             compostTemperature: 0,
             airTemperature: 0,
@@ -322,6 +340,7 @@ export const deviceService = {
       } else {
         await set(rtdbRef, {
           lastSeen: Math.floor(Date.now() / 1000),
+          firmwareVersion: deviceData.firmwareVersion?.trim() || '1.0.0',
           status: 'online',
         });
       }
@@ -329,7 +348,7 @@ export const deviceService = {
       console.warn('RTDB initialization notice:', err);
     }
 
-    return { ...newDevice, apiKey, status: 'offline' };
+    return { ...newDevice, apiKey, connectionStatus: 'offline', status: 'pending' };
   },
 
   /**

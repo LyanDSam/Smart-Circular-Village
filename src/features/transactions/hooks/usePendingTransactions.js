@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { rtdbService } from '@/services/rtdbService';
 import { userService } from '@/services/userService';
 import { deviceService } from '@/services/deviceService';
+import { postService } from '@/services/postService';
 import { useAuth } from '@/hooks/useAuth';
 
 export const usePendingTransactions = ({ autoOpenModal = false } = {}) => {
@@ -28,93 +29,135 @@ export const usePendingTransactions = ({ autoOpenModal = false } = {}) => {
   const userProfileRef = useRef(userProfile);
   userProfileRef.current = userProfile;
 
-  // Subscribe to RTDB pending_transactions in real time via onValue (runs once on mount)
+  const userRole = userProfile?.role;
+  const isAdmin = userRole === 'admin';
+  const isOfficer = userRole === 'officer';
+  const officerPostId = userProfile?.postId;
+  const officerDeviceId = (
+    userProfile?.assignedDeviceId ||
+    userProfile?.deviceId ||
+    ''
+  ).trim().toUpperCase();
+
+  // Subscribe to RTDB pending_transactions in real time via onValue (runs when user role, post, or device assignment changes)
   useEffect(() => {
     setIsLoading(true);
 
-    const unsubscribe = rtdbService.listenPendingTransactions(async (items) => {
-      const currentUser = userProfileRef.current;
-      const isOfficer = currentUser?.role === 'officer';
+    // 1. Citizens and non-authorized roles do not access pending transactions queue
+    if (!isOfficer && !isAdmin) {
+      setPendingList([]);
+      setIsLoading(false);
+      return;
+    }
 
-      // 1. Administrators and Non-Officers NEVER receive popups or store pending transactions in state
-      if (!isOfficer) {
-        setPendingList([]);
-        setIsLoading(false);
-        return;
+    let isMounted = true;
+    let unsubscribeFn = null;
+
+    const setupListener = async () => {
+      // Build set of allowed device IDs for Officers based on their assigned Posko (postId) and assignedDeviceId
+      const allowedDevices = new Set();
+      if (officerDeviceId) {
+        allowedDevices.add(officerDeviceId);
       }
 
-      // 2. Get Officer's assigned device ID (assignedDeviceId or deviceId)
-      const officerDeviceId = (
-        currentUser?.assignedDeviceId ||
-        currentUser?.deviceId ||
-        ''
-      ).trim().toUpperCase();
-
-      // 3. Early Filter: Only retain items matching officer's assignedDeviceId
-      const activeItems = items.filter((item) => {
-        const status = (item.status || '').toLowerCase();
-        const isWaiting =
-          !status || status === 'waiting_confirmation' || status === 'pending' || status === 'processing';
-
-        const txDeviceId = (item.deviceId || item.device || '').trim().toUpperCase();
-
-        // Transaction deviceId MUST match officerDeviceId exactly
-        const matchesDevice = officerDeviceId ? txDeviceId === officerDeviceId : false;
-
-        return isWaiting && matchesDevice;
-      });
-
-      // Update local state immediately with filtered items
-      setPendingList(activeItems);
-      setIsLoading(false);
-
-      if (activeItems.length === 0) return;
-
-      // Perform direct indexed Firestore queries for RFID lookup
-      const newMap = {};
-      await Promise.all(
-        activeItems.map(async (item) => {
-          const rawRfid = item.rfidUid || item.uid || '';
-          if (rawRfid) {
-            const cleanRfid = String(rawRfid).replace(/\s+/g, '').toUpperCase();
-            try {
-              const citizen = await userService.getUserByRfidUid(cleanRfid);
-              if (citizen) {
-                newMap[cleanRfid] = citizen;
-              }
-            } catch (err) {
-              console.warn(`[RTDB Sync] Error querying citizen user for RFID ${cleanRfid}:`, err);
-            }
+      if (isOfficer && officerPostId) {
+        try {
+          const post = await postService.getPostById(officerPostId);
+          if (post && Array.isArray(post.deviceIds)) {
+            post.deviceIds.forEach((id) => allowedDevices.add(String(id).trim().toUpperCase()));
           }
-        })
-      );
-
-      setCitizenMap((prev) => ({ ...prev, ...newMap }));
-
-      // Auto-open modal for Officers if activeItems has items for assigned device
-      if (autoOpenModalRef.current && activeItems.length > 0) {
-        const latestUnconfirmed = activeItems.find((i) => {
-          const st = (i.status || '').toLowerCase();
-          return (!st || st === 'waiting_confirmation' || st === 'pending') && !dismissedSetRef.current.has(i.transactionId);
-        });
-
-        if (latestUnconfirmed && !activePendingRef.current && !unknownRfidPendingRef.current) {
-          const cleanRfid = String(latestUnconfirmed.rfidUid || latestUnconfirmed.uid || '').replace(/\s+/g, '').toUpperCase();
-          if (newMap[cleanRfid] || citizenMap[cleanRfid]) {
-            console.log('[RTDB Sync] Auto-opening Confirmation Modal for Officer:', latestUnconfirmed.transactionId);
-            setActivePending(latestUnconfirmed);
-          } else {
-            console.log('[RTDB Sync] Auto-opening Unknown RFID Modal for Officer:', latestUnconfirmed.transactionId);
-            setUnknownRfidPending(latestUnconfirmed);
-          }
+        } catch (err) {
+          console.warn('Notice loading officer post devices:', err);
         }
       }
-    });
+
+      if (!isMounted) return;
+
+      unsubscribeFn = rtdbService.listenPendingTransactions(async (items) => {
+        if (!isMounted) return;
+
+        // 2. Filter active pending items: Posko & Device Matching
+        const activeItems = items.filter((item) => {
+          const status = (item.status || '').toLowerCase();
+          const isWaiting =
+            !status || status === 'waiting_confirmation' || status === 'pending' || status === 'processing';
+
+          const txDeviceId = (item.deviceId || item.device || '').trim().toUpperCase();
+
+          // Admins see all RTDB queue items. Officers see ONLY items from devices belonging to their assigned Posko / assigned device ID.
+          let matchesDevice = false;
+          if (isAdmin) {
+            matchesDevice = true;
+          } else if (isOfficer) {
+            if (allowedDevices.size > 0) {
+              matchesDevice = allowedDevices.has(txDeviceId);
+            } else if (officerDeviceId) {
+              matchesDevice = txDeviceId === officerDeviceId;
+            } else {
+              // Officer has no Posko or Device assigned -> cannot process transactions
+              matchesDevice = false;
+            }
+          }
+
+          return isWaiting && matchesDevice;
+        });
+
+        // Update local state immediately with filtered items
+        setPendingList(activeItems);
+        setIsLoading(false);
+
+        if (activeItems.length === 0) return;
+
+        // Perform direct indexed Firestore queries for RFID lookup
+        const newMap = {};
+        await Promise.all(
+          activeItems.map(async (item) => {
+            const rawRfid = item.rfidUid || item.uid || '';
+            if (rawRfid) {
+              const cleanRfid = String(rawRfid).replace(/\s+/g, '').toUpperCase();
+              try {
+                const citizen = await userService.getUserByRfidUid(cleanRfid);
+                if (citizen) {
+                  newMap[cleanRfid] = citizen;
+                }
+              } catch (err) {
+                console.warn(`[RTDB Sync] Error querying citizen user for RFID ${cleanRfid}:`, err);
+              }
+            }
+          })
+        );
+
+        if (!isMounted) return;
+        setCitizenMap((prev) => ({ ...prev, ...newMap }));
+
+        // Auto-open modal for Officers if activeItems has items for assigned device/Posko
+        if (isOfficer && autoOpenModalRef.current && activeItems.length > 0) {
+          const latestUnconfirmed = activeItems.find((i) => {
+            const st = (i.status || '').toLowerCase();
+            return (!st || st === 'waiting_confirmation' || st === 'pending') && !dismissedSetRef.current.has(i.transactionId);
+          });
+
+          if (latestUnconfirmed && !activePendingRef.current && !unknownRfidPendingRef.current) {
+            const cleanRfid = String(latestUnconfirmed.rfidUid || latestUnconfirmed.uid || '').replace(/\s+/g, '').toUpperCase();
+            if (newMap[cleanRfid] || citizenMap[cleanRfid]) {
+              console.log('[RTDB Sync] Auto-opening Confirmation Modal for Officer:', latestUnconfirmed.transactionId);
+              setActivePending(latestUnconfirmed);
+            } else {
+              console.log('[RTDB Sync] Auto-opening Unknown RFID Modal for Officer:', latestUnconfirmed.transactionId);
+              setUnknownRfidPending(latestUnconfirmed);
+            }
+          }
+        }
+      });
+    };
+
+    setupListener();
 
     return () => {
-      if (typeof unsubscribe === 'function') unsubscribe();
+      isMounted = false;
+      if (typeof unsubscribeFn === 'function') unsubscribeFn();
     };
-  }, []);
+  }, [userRole, officerPostId, officerDeviceId]);
 
   const openConfirmationModal = useCallback((item) => {
     const rawRfid = item.rfidUid || item.uid || '';

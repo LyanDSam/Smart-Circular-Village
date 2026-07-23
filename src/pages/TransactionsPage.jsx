@@ -33,6 +33,7 @@ import {
 
 export const TransactionsPage = () => {
   const { userProfile } = useAuth();
+  const isOfficer = userProfile?.role === 'officer';
 
   const [activeTab, setActiveTab] = useState('pending'); // 'pending' | 'history'
   const [selectedTx, setSelectedTx] = useState(null);
@@ -331,8 +332,8 @@ export const TransactionsPage = () => {
         </div>
       )}
 
-      {/* Confirmation Modal for Known Citizens */}
-      {activePending && (
+      {/* Confirmation Modal for Known Citizens (Officers ONLY) */}
+      {isOfficer && activePending && (
         <ConfirmTransactionModal
           isOpen={Boolean(activePending)}
           onClose={closeConfirmationModal}
@@ -343,8 +344,8 @@ export const TransactionsPage = () => {
         />
       )}
 
-      {/* Unknown RFID Dedicated Modal */}
-      {unknownRfidPending && (
+      {/* Unknown RFID Dedicated Modal (Officers ONLY) */}
+      {isOfficer && unknownRfidPending && (
         <UnknownRfidModal
           isOpen={Boolean(unknownRfidPending)}
           onClose={closeUnknownRfidModal}

@@ -6,6 +6,8 @@ import {
   writeBatch,
   increment,
   serverTimestamp,
+  query,
+  where,
 } from 'firebase/firestore';
 import { db } from '@/firebase/firestore';
 import { pointService } from './pointService';
@@ -27,7 +29,7 @@ export const transactionService = {
     }
 
     const transactionId = pendingTx.transactionId;
-    const deviceId = pendingTx.deviceId || pendingTx.device || 'SCV-COLL-001';
+    const deviceId = pendingTx.deviceId || pendingTx.device || 'SCV-09009';
     const rawRfid = pendingTx.rfidUid || pendingTx.uid || '';
     const cleanRfid = String(rawRfid || '').replace(/\s+/g, '').toUpperCase();
     const weightGram = pendingTx.weightGram ?? pendingTx.weight ?? 0;
@@ -142,7 +144,15 @@ export const transactionService = {
 
     try {
       const txRef = collection(db, 'transactions');
-      const qSnap = await getDocs(txRef);
+      let q = txRef;
+
+      if (citizenId) {
+        q = query(txRef, where('userId', '==', citizenId));
+      } else if (officerId) {
+        q = query(txRef, where('officerId', '==', officerId));
+      }
+
+      const qSnap = await getDocs(q);
 
       if (!qSnap.empty) {
         txList = qSnap.docs.map((d) => ({ transactionId: d.id, ...d.data() }));

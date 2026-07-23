@@ -190,41 +190,52 @@ export const UnknownRfidModal = ({
                 </div>
               </div>
             ) : (
-              /* Main 3 Actions */
+              /* 4 Operational Actions for Unknown RFID */
               <div className="space-y-2 pt-2">
-                {/* 1. Primary Button: Link RFID to Existing Citizen */}
+                {/* Option 1: Link RFID to Existing Citizen */}
                 <Button
                   type="button"
                   onClick={() => setShowCitizenSelector(true)}
                   className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-2 rounded-xl py-2.5 shadow-sm"
                 >
                   <Link2 className="w-4 h-4" />
-                  <span>1. Tautkan RFID ke Warga Terdaftar</span>
+                  <span>1. Tautkan RFID ke Akun Warga</span>
                 </Button>
 
                 <div className="grid grid-cols-2 gap-2">
-                  {/* 2. Secondary Button: Scan Again / Dismiss */}
+                  {/* Option 2: Scan Ulang Card */}
                   <Button
                     type="button"
                     variant="outline"
                     onClick={onClose}
                     className="text-xs font-semibold border-slate-200 dark:border-slate-800 rounded-xl gap-1.5"
                   >
-                    <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
-                    <span>2. Scan Lagi / Tutup</span>
+                    <RefreshCw className="w-3.5 h-3.5 text-blue-500" />
+                    <span>2. Scan Ulang Card</span>
                   </Button>
 
-                  {/* 3. Danger Button: Cancel Transaction */}
+                  {/* Option 3: View Pending Queue */}
                   <Button
                     type="button"
-                    variant="ghost"
-                    onClick={() => setShowCancelConfirm(true)}
-                    className="text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl gap-1.5"
+                    variant="outline"
+                    onClick={onClose}
+                    className="text-xs font-semibold border-slate-200 dark:border-slate-800 rounded-xl gap-1.5"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>3. Batalkan Transaksi</span>
+                    <Clock className="w-3.5 h-3.5 text-amber-500" />
+                    <span>3. Lihat Antrean</span>
                   </Button>
                 </div>
+
+                {/* Option 4: Cancel Transaction */}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setShowCancelConfirm(true)}
+                  className="w-full text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl gap-1.5 mt-1"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>4. Batalkan Transaksi (Kartu Tidak Dikenal)</span>
+                </Button>
               </div>
             )}
           </div>

@@ -189,6 +189,12 @@ export const useDevices = () => {
     return res;
   };
 
+  const deleteDevice = async (deviceId) => {
+    const res = await deviceService.deleteDevice(deviceId);
+    await fetchDevices();
+    return res;
+  };
+
   return {
     devices,
     stats,

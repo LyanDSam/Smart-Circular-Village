@@ -143,17 +143,15 @@ export const userService = {
   },
 
   /**
-   * Validate RFID Uniqueness across all users in Firestore.
+   * Validate RFID Uniqueness across all users in Firestore using indexed query.
    */
   async isRfidUnique(rfidUid, currentUid = null) {
     if (!rfidUid) return true;
     const cleanRfid = String(rfidUid).trim().toUpperCase();
 
-    const { users } = await this.getUsers({ pageSize: 10000 });
-    const existing = users.find(
-      (u) => u.rfidUid && u.rfidUid.toUpperCase() === cleanRfid && u.uid !== currentUid
-    );
-    return !existing;
+    const existingUser = await this.getUserByRfidUid(cleanRfid);
+    if (!existingUser) return true;
+    return existingUser.uid === currentUid;
   },
 
   /**

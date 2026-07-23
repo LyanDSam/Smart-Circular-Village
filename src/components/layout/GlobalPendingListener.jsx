@@ -8,21 +8,9 @@ import {
 } from '@/features/transactions';
 import { transactionService } from '@/services/transactionService';
 
-export const GlobalPendingListener = () => {
-  const { userProfile } = useAuth();
-  const location = useLocation();
+const OfficerPendingListenerInner = ({ userProfile }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
-
-  // ONLY run for officers. Administrators must NOT receive transaction popups.
-  const isOfficer = userProfile?.role === 'officer';
-
-  // Do not render duplicate modals if currently on /transactions page
-  const isOnTransactionsPage =
-    location.pathname.startsWith('/transactions') ||
-    location.pathname.startsWith('/officer/transactions');
-
-  const enableAutoModal = isOfficer && !isOnTransactionsPage;
 
   const {
     activePending,
@@ -31,11 +19,7 @@ export const GlobalPendingListener = () => {
     closeConfirmationModal,
     closeUnknownRfidModal,
     handleResumeAfterRfidLinked,
-  } = usePendingTransactions({ autoOpenModal: enableAutoModal });
-
-  if (!isOfficer || isOnTransactionsPage) {
-    return null;
-  }
+  } = usePendingTransactions({ autoOpenModal: true });
 
   const activeRfid = activePending
     ? String(activePending.rfidUid || activePending.uid || '').replace(/\s+/g, '').toUpperCase()
@@ -111,4 +95,23 @@ export const GlobalPendingListener = () => {
       />
     </>
   );
+};
+
+export const GlobalPendingListener = () => {
+  const { userProfile } = useAuth();
+  const location = useLocation();
+
+  // ONLY run for officers. Administrators and citizens must NOT execute listeners or receive popups.
+  const isOfficer = userProfile?.role === 'officer';
+
+  // Do not render duplicate modals if currently on /transactions or /officer/transactions page
+  const isOnTransactionsPage =
+    location.pathname.startsWith('/transactions') ||
+    location.pathname.startsWith('/officer/transactions');
+
+  if (!isOfficer || isOnTransactionsPage) {
+    return null;
+  }
+
+  return <OfficerPendingListenerInner userProfile={userProfile} />;
 };

@@ -1,240 +1,396 @@
-# Smart Circular Village (SCV) — Project Context & System Architecture
+# PROJECT_CONTEXT.md
 
-**Document Version:** 4.0.0  
-**Status:** Official Technical Architecture Reference (ESP32 Synchronized & Control-Centered)  
-**Last Updated:** July 2026  
+# Smart Circular Village (SCV)
 
----
-
-## 1. Executive Summary & Project Overview
-
-**Smart Circular Village (SCV)** is an Internet of Things (IoT)-based web platform designed to digitalize, automate, and optimize organic and inorganic waste management at the village level.
-
-The platform integrates two core subsystems:
-1. **Digital Waste Bank (Smart Collection Station)**: Automated weighing (Load Cell) and citizen identification via physical RFID cards with point-based rewards.
-2. **Smart Compost Bin Monitoring System**: Real-time telemetry monitoring (Temperature, Humidity, Soil Moisture, Methane Gas, Leachate Water Level) and actuator controls (Aeration Fan & Irrigation Water Pump) via ESP32 microcontrollers.
+Version: 2.0
+Status: Active Development
+Last Updated: July 2026
 
 ---
 
-## 2. High-Level System Architecture
+# 1. Overview
 
-```
-                  ┌─────────────────────────────────────┐
-                  │    React Single Page App (SPA)      │
-                  │   (Vite + Tailwind + Shadcn UI)     │
-                  └──────────────────┬──────────────────┘
-                                     │
-                                     ▼
-                  ┌─────────────────────────────────────┐
-                  │       Firebase Authentication       │
-                  └──────────────────┬──────────────────┘
-                                     │
-                                     ▼
-                  ┌─────────────────────────────────────┐
-                  │      Cloud Functions REST API       │
-                  └──────────┬──────────────────┬───────┘
-                             │                  │
-                             ▼                  ▼
-              ┌────────────────────────┐  ┌─────────────────────────────┐
-              │     Cloud Firestore    │  │ Firebase Realtime Database  │
-              │    (Business Data)     │  │  (Control & Signal Layer)   │
-              └────────────────────────┘  └──────────────┬──────────────┘
-                                                         │
-                                                         ▼
-                                              ┌─────────────────────┐
-                                              │    ESP32 Devices    │
-                                              └─────────────────────┘
-```
+Smart Circular Village (SCV) is a web-based platform that digitizes village waste management through the integration of IoT devices and cloud services.
+
+The project focuses on two major systems:
+
+1. Digital Waste Bank
+2. Smart Compost Monitoring
+
+The website is responsible for managing users, devices, transactions, rewards, reports, and realtime monitoring.
+
+IoT firmware is developed separately.
 
 ---
 
-## 3. Dual Database Architecture Strategy
+# 2. Main Goals
 
-The Smart Circular Village platform employs a strict **Dual Database Architecture** where the Web Platform serves as the **Command & Control Center** over ESP32 hardware via Firebase Realtime Database.
+SCV aims to:
 
-```
-                         ┌─────────────────────────────────────┐
-                         │      Smart Circular Village         │
-                         └──────────────────┬──────────────────┘
-                                            │
-             ┌──────────────────────────────┴──────────────────────────────┐
-             ▼                                                             ▼
- ┌───────────────────────────────┐                             ┌───────────────────────────────┐
- │        Cloud Firestore        │                             │  Firebase Realtime Database   │
- ├───────────────────────────────┤                             ├───────────────────────────────┤
- │ • Permanent Business Data     │                             │ • Realtime IoT Control Node   │
- │ • users                       │                             │ • devices/{deviceId}/lastSeen │
- │ • devices (Metadata ONLY)     │                             │ • devices/{deviceId}/config   │
- │ • transactions (Finalized)    │                             │ • devices/{deviceId}/telemetry│
- │ • rewards                     │                             │ • devices/{deviceId}/relay    │
- │ • reward_redemptions          │                             │ • devices/{deviceId}/alerts   │
- │ • settings                    │                             │ • pending_transactions        │
- │ • notifications               │                             │ • Instant WebSocket Sync      │
- └───────────────────────────────┘                             └───────────────────────────────┘
-```
+- Digitalize village waste collection.
+- Improve transparency.
+- Increase citizen participation.
+- Implement a reward point system.
+- Monitor compost production in realtime.
+- Produce operational reports.
 
 ---
 
-## 4. Realtime Database (RTDB) Unified Schema & Control Layer
+# 3. System Scope
 
-### A. Per-Device Tree (`devices/{deviceId}`)
+This repository ONLY contains the web application.
 
-```json
-{
-  "devices": {
-    "SCV-COLL-001": {
-      "lastSeen": 1784729150,
-      "config": {
-        "mode": "collection",          // "collection" | "pairing" | "maintenance"
-        "heartbeatInterval": 10,       // Seconds
-        "firmwareVersion": "1.0.0",
-        "calibrationFactor": 420,
-        "autoUpload": false
-      },
-      "telemetry": {
-        "lastRfidUid": "8A3F1C90",
-        "lastWeightGram": 4520,
-        "updatedAt": 1784729150
-      }
-    },
-    "SCV-COMP-001": {
-      "lastSeen": 1784729100,
-      "config": {
-        "mode": "collection",
-        "heartbeatInterval": 10,
-        "firmwareVersion": "1.0.0",
-        "calibrationFactor": 1.0,
-        "autoUpload": true
-      },
-      "telemetry": {
-        "compostTemperature": 48.5,
-        "airTemperature": 29.1,
-        "airHumidity": 65.0,
-        "soilMoisture": 42.0,
-        "gas": 120,
-        "waterLevel": "Normal",
-        "updatedAt": 1784729100
-      },
-      "relay": {
-        "fan": false,
-        "pump": false,
-        "mode": "auto"
-      },
-      "alerts": {
-        "highTemperature": false,
-        "lowMoisture": false,
-        "gasWarning": false,
-        "waterOverflow": false
-      }
-    }
-  }
-}
-```
+The web application is responsible for:
 
-### B. Pending Transactions Queue (`pending_transactions/{transactionId}`)
+- Authentication
+- Authorization
+- User Management
+- Device Management
+- Waste Transactions
+- Reward System
+- Dashboard
+- Reports
+- Monitoring
 
-```json
-{
-  "pending_transactions": {
-    "TX_PENDING_001": {
-      "transactionId": "TX_PENDING_001",
-      "deviceId": "SCV-COLL-001",
-      "rfidUid": "8A3F1C90",
-      "weightGram": 4520,
-      "timestamp": 1784729150,
-      "status": "waiting_confirmation"  // "waiting_confirmation" | "processing" | "completed" | "cancelled"
-    }
-  }
-}
-```
+Firmware development is outside this repository.
 
 ---
 
-## 5. Workflows & Command-and-Control Protocols
+# 4. Technology Stack
 
-### A. Automatic RFID Pairing Workflow (No Firmware Re-flashing)
+Frontend
 
-```
-[Citizen Register on Web] ──> Status: pending
-                                 │
-                                 ▼
-[Admin opens /admin/users/pending] ──> Clicks "Pair RFID"
-                                 │
-                                 ▼
-[Web] ──> Writes `devices/SCV-COLL-001/config/mode = "pairing"` via RTDB
-                                 │
-                                 ▼
-[ESP32 Listener] ──> Detects mode change ──> Enters PAIRING Mode (OLED displays "Ready to Pair")
-                                 │
-                                 ▼
-[Admin/Petugas] ──> Taps RFID Card on ESP32 Reader
-                                 │
-                                 ▼
-[ESP32] ──> Sends UID (e.g. `8A3F1C90`) to RTDB `/devices/SCV-COLL-001/telemetry/lastRfidUid`
-                                 │
-                                 ▼
-[Web Realtime Listener] ──> Receives `8A3F1C90` ──> Displays Confirmation Popup Modal
-                                 │
-                                 ▼
-[Admin clicks "Hubungkan"] ──> Updates Firestore `users/{uid}.rfidUid = "8A3F1C90"` & `status = "active"`
-                                 │
-                                 ▼
-[Web Restore Mode] ──> Writes `devices/SCV-COLL-001/config/mode = "collection"` back to RTDB
-```
+- React
+- Vite
+- JavaScript
+- Tailwind CSS
+- Shadcn UI
 
-### B. Collection & Weighing Workflow
+Backend
 
-```
-[Tap RFID at Collection Station] ──> ESP32 reads UID (`8A3F1C90`) & Weight (`4520` gram)
-                                         │
-                                         ▼
-[ESP32] ──> Pushes record to RTDB `/pending_transactions/{txId}`
-            • deviceId: "SCV-COLL-001"
-            • rfidUid: "8A3F1C90"
-            • weightGram: 4520
-            • status: "waiting_confirmation"
-                                         │
-                                         ▼
-[Admin/Officer Dashboard] ──> RTDB Listener detects new `waiting_confirmation` transaction
-                                         │
-                                         ▼
-[Popup Modal Opens] ──> Displays Citizen Name, Weight (converted: 4.52 Kg), Category Select dropdown
-                                         │
-                                         ▼
-[Officer Selects Category & Clicks "Save"] ──> Executes Firestore Transaction Batch:
-            ├─ 1. Sets transaction status in RTDB = "processing" (Lock against concurrency)
-            ├─ 2. Calculates Points (e.g., 4.52 kg x 100 pts/kg = 452 pts)
-            ├─ 3. Writes permanent record to Firestore `transactions/{txId}`
-            ├─ 4. Atomically increments Citizen points balance in Firestore `users/{uid}`
-            │
-            ▼
-[Cleanup] ──> Deletes record from RTDB `/pending_transactions/{txId}`
-```
+- Firebase Authentication
+- Cloud Firestore
+- Firebase Realtime Database
+- Firebase Storage
 
 ---
 
-## 6. System Conventions & Rules
+# 5. Firebase Responsibilities
 
-1. **Weight Integer Format**: ESP32 sends weight strictly as an integer in grams (`"weightGram": 4520`). Conversion to Kg (`4.52 Kg`) is performed by the Web Platform.
-2. **RFID UID Standardized Format**: Uppercase hexadecimal string without spaces (e.g. `8A3F1C90`). Checked for global uniqueness before account activation.
-3. **Heartbeat & Status Calculation**: ESP32 updates `lastSeen` every 10 seconds. Web platform computes online status:
-   `status = !isActive ? 'disabled' : (now - lastSeen < 60000ms ? 'online' : 'offline')`.
-4. **Device ID Naming**:
-   - Collection Station: `SCV-COLL-001`, `SCV-COLL-002`, ...
-   - Compost Bin: `SCV-COMP-001`, `SCV-COMP-002`, ...
+SCV intentionally uses TWO Firebase databases.
+
+## Cloud Firestore
+
+Firestore stores business data.
+
+Examples:
+
+- users
+- devices
+- transactions
+- rewards
+- reward_redemptions
+
+Firestore is the system of record.
 
 ---
 
-## 7. User Roles & Permission Matrix
+## Firebase Realtime Database
 
-| Feature / Page | Guest | Citizen (Pending) | Citizen (Active) | Officer | Government | Admin |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|
-| `/login` & `/register` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/verification-pending` | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
-| `/dashboard` | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ |
-| `/transactions` | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ |
-| `/compost` | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ |
-| `/reports` | ❌ | ❌ | ❌ | ❌ | ✅ (Read) | ✅ |
-| `/devices` | ❌ | ❌ | ❌ | ❌ | ✅ (Read-Only) | ✅ (Full Control) |
-| `/admin/users` | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
-| `/settings` | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
+Realtime Database stores live IoT data.
+
+Examples:
+
+- pending_transactions
+- telemetry
+- heartbeat
+
+RTDB should NEVER become the permanent transaction database.
+
+Once a transaction is confirmed, it is moved into Firestore.
+
+---
+
+# 6. User Roles
+
+## Administrator
+
+Responsibilities:
+
+- Manage users
+- Manage officers
+- Manage devices
+- Manage rewards
+- View reports
+- Configure the system
+
+Administrator does NOT process waste transactions.
+
+Administrator must NEVER receive transaction popup notifications.
+
+---
+
+## Officer
+
+Responsibilities:
+
+- Process waste transactions.
+- Confirm RFID transactions.
+- Manage reward redemption.
+- View assigned device activity.
+
+Each Officer is assigned to exactly ONE active Device.
+
+---
+
+## Citizen
+
+Responsibilities:
+
+- Register account.
+- View profile.
+- View point balance.
+- View transaction history.
+- Redeem rewards.
+
+Citizens never access admin pages.
+
+---
+
+# 7. Device Concept
+
+Each ESP32 represents ONE physical collection station.
+
+Each device has a unique Device ID.
+
+Example:
+
+SCV-09009
+
+Device IDs are permanent.
+
+The Device ID is the primary identifier for realtime transactions.
+
+---
+
+# 8. Device Assignment
+
+Each Officer is assigned to ONE Device.
+
+Example:
+
+Officer Samuel
+
+↓
+
+Assigned Device
+
+↓
+
+SCV-09009
+
+When the assignment changes, future transactions immediately follow the new assignment.
+
+No database redesign is required.
+
+---
+
+# 9. Waste Transaction Flow
+
+Citizen
+
+↓
+
+RFID Card
+
+↓
+
+ESP32
+
+↓
+
+Realtime Database
+
+↓
+
+Officer Website
+
+↓
+
+Confirmation Popup
+
+↓
+
+Firestore Transaction
+
+↓
+
+User Points Updated
+
+↓
+
+Pending Transaction Removed
+
+---
+
+# 10. Unknown RFID
+
+If an RFID card is not registered:
+
+The system must display:
+
+Unknown RFID Card
+
+The Officer can:
+
+- Retry scanning
+- Remove the pending transaction
+
+The Officer must NOT create transactions for unknown RFID cards.
+
+---
+
+# 11. Reward Flow
+
+Citizen selects a reward.
+
+↓
+
+Redemption request created.
+
+↓
+
+QR Code generated.
+
+↓
+
+Citizen visits Waste Bank.
+
+↓
+
+Officer scans QR Code or enters Redemption ID.
+
+↓
+
+Reward confirmed.
+
+↓
+
+Points deducted.
+
+↓
+
+Reward stock updated.
+
+QR Codes are used ONLY for reward redemption.
+
+RFID is used ONLY for waste transactions.
+
+---
+
+# 12. Device Approval
+
+New devices require Administrator approval.
+
+Approval lifecycle:
+
+Pending
+
+↓
+
+Approved
+
+↓
+
+Operational
+
+Rejected devices cannot be assigned to Officers.
+
+Approval is a business process.
+
+Realtime heartbeat must never change approval status.
+
+---
+
+# 13. Connection Status
+
+Connection status is independent from approval status.
+
+Examples:
+
+Online
+
+Offline
+
+Maintenance
+
+Warning
+
+Error
+
+Connection status is calculated from RTDB heartbeat.
+
+It must never overwrite business approval status.
+
+---
+
+# 14. Database Rules
+
+Firestore stores permanent records.
+
+Realtime Database stores temporary realtime data.
+
+Never duplicate the same business data across both databases.
+
+---
+
+# 15. Architecture Rules
+
+The AI Agent MUST NOT:
+
+- redesign Firestore without approval
+- redesign RTDB without approval
+- rename collections without approval
+- introduce new collections unless requested
+- modify firmware assumptions
+- replace RTDB with Firestore
+- replace Firestore with RTDB
+
+Always preserve existing architecture.
+
+---
+
+# 16. Development Principles
+
+Every implementation must:
+
+- be modular
+- be reusable
+- use feature-based architecture
+- avoid duplicated logic
+- avoid duplicated Firebase queries
+- avoid unnecessary re-renders
+- keep services independent from UI
+
+---
+
+# 17. Before Any Implementation
+
+Before implementing a new feature, the AI Agent MUST:
+
+1. Read this PROJECT_CONTEXT.md.
+2. Inspect the existing code.
+3. Inspect the current Firestore structure.
+4. Inspect the current Realtime Database structure.
+5. Reuse existing services whenever possible.
+6. Avoid assumptions about database schema.
+
+If the actual database differs from documentation, the Agent must report the difference before changing code.
+
+---
+
+# 18. Source of Truth
+
+This document is the primary architectural reference for the Smart Circular Village project.
+
+The Agent must follow this document unless explicitly instructed otherwise by the project owner.
